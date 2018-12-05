@@ -572,6 +572,12 @@ fam_prop_name returns [PropertyName ret]
 prop_value returns [Object ret]
     :   v=identifier { $ret = v; }
     |   l=literal { $ret = l.getValue(); }
+    |   list=prop_values { $ret = list; }
+    ;
+
+prop_values returns [List<Object> ret]
+@init{ ret = new ArrayList<Object>(); }
+    :   LPAREN p=prop_value {$ret.add(p);} ( COMMA p=prop_value {$ret.add(p);} )* RPAREN
     ;
     
 column_name returns [ColumnName ret]
