@@ -15,17 +15,37 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.phoenix.expression.visitor;
+package org.apache.phoenix.spark.datasource.v2.reader;
 
-import java.util.List;
+import java.io.Serializable;
 
-import org.apache.phoenix.expression.Determinism;
-import org.apache.phoenix.expression.Expression;
+public class PhoenixDataSourceReadOptions implements Serializable {
 
-public class CloneNonDeterministicExpressionVisitor extends CloneExpressionVisitor {
+    private final String tenantId;
+    private final String zkUrl;
+    private final String scn;
+    private final String selectStatement;
 
-    @Override
-    public boolean isCloneNode(Expression node, List<Expression> children) {
-        return Determinism.PER_INVOCATION.compareTo(node.getDeterminism()) <= 0;
+    public PhoenixDataSourceReadOptions(String zkUrl, String scn, String tenantId, String selectStatement) {
+        this.zkUrl = zkUrl;
+        this.scn = scn;
+        this.tenantId = tenantId;
+        this.selectStatement = selectStatement;
+    }
+
+    public String getSelectStatement() {
+        return selectStatement;
+    }
+
+    public String getScn() {
+        return scn;
+    }
+
+    public String getZkUrl() {
+        return zkUrl;
+    }
+
+    public String getTenantId() {
+        return tenantId;
     }
 }

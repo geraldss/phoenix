@@ -26,6 +26,7 @@
 
   <properties>
     <top.dir>${project.basedir}/..</top.dir>
+    <argparse4j.version>0.8.1</argparse4j.version>
   </properties>
 
   <build>
@@ -194,6 +195,63 @@
   </build>
 
   <dependencies>
+  <dependency>
+    <groupId>org.apache.omid</groupId>
+    <artifactId>omid-hbase-client-hbase2.x</artifactId>
+    <version>${omid.version}</version>
+    <exclusions>
+      <exclusion>
+        <groupId>org.testng</groupId>
+        <artifactId>testng</artifactId>
+      </exclusion>
+    </exclusions>
+  </dependency>
+  <dependency>
+    <groupId>org.apache.omid</groupId>
+    <artifactId>omid-hbase-coprocessor-hbase2.x</artifactId>
+    <version>${omid.version}</version>
+    <exclusions>
+      <exclusion>
+        <groupId>org.testng</groupId>
+        <artifactId>testng</artifactId>
+      </exclusion>
+    </exclusions>
+  </dependency>
+    <dependency>
+      <groupId>org.apache.omid</groupId>
+      <artifactId>omid-hbase-shims-hbase2.x</artifactId>
+      <version>${omid.version}</version>
+      <exclusions>
+        <exclusion>
+          <groupId>org.testng</groupId>
+          <artifactId>testng</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+  <dependency>
+    <groupId>org.apache.omid</groupId>
+    <artifactId>omid-tso-server-hbase2.x</artifactId>
+    <version>${omid.version}</version>
+    <exclusions>
+      <exclusion>
+        <groupId>org.testng</groupId>
+        <artifactId>testng</artifactId>
+      </exclusion>
+    </exclusions>
+  </dependency>
+  <dependency>
+    <groupId>org.apache.omid</groupId>
+    <artifactId>omid-tso-server-hbase2.x</artifactId>
+    <version>${omid.version}</version>
+    <type>test-jar</type>
+    <exclusions>
+      <exclusion>
+        <groupId>org.testng</groupId>
+        <artifactId>testng</artifactId>
+      </exclusion>
+    </exclusions>
+  </dependency>
+
     <!-- Transaction dependencies -->
     <dependency>
       <groupId>org.apache.tephra</groupId>
@@ -227,6 +285,12 @@
       <groupId>sqlline</groupId>
       <artifactId>sqlline</artifactId>
     </dependency>
+    <dependency>
+      <groupId>net.sourceforge.argparse4j</groupId>
+      <artifactId>argparse4j</artifactId>
+      <version>${argparse4j.version}</version>
+    </dependency>
+
     <dependency>
       <groupId>com.google.guava</groupId>
       <artifactId>guava</artifactId>
