@@ -1036,8 +1036,10 @@ public class PTableImpl implements PTable {
         }
     }
 
-    private PRow newRow(KeyValueBuilder builder, long ts, ImmutableBytesWritable key, int i, boolean hasOnDupKey, byte[]... values) {
-        PRow row = new PRowImpl(builder, key, ts, getBucketNum(), hasOnDupKey);
+    private PRow newRow(KeyValueBuilder builder, long ts, ImmutableBytesWritable key, int i,
+        boolean hasOnDupKey, Map<PColumn, byte[]> columnValues, byte[]... values) {
+        ImmutableBytesWritable saltKey = getSaltKey(key, columnValues);
+        PRow row = new PRowImpl(builder, key, saltKey, ts, getBucketNum(), hasOnDupKey);
         if (i < values.length) {
             for (PColumnFamily family : getColumnFamilies()) {
                 for (PColumn column : family.getColumns()) {
@@ -1050,15 +1052,21 @@ public class PTableImpl implements PTable {
         return row;
     }
 
-    @Override
-    public PRow newRow(KeyValueBuilder builder, long ts, ImmutableBytesWritable key,
-            boolean hasOnDupKey, byte[]... values) {
-        return newRow(builder, ts, key, 0, hasOnDupKey, values);
+    private ImmutableBytesWritable getSaltKey(
+        ImmutableBytesWritable key, Map<PColumn, byte[]> columnValues) {
+        return key;
     }
 
     @Override
-    public PRow newRow(KeyValueBuilder builder, ImmutableBytesWritable key, boolean hasOnDupKey, byte[]... values) {
-        return newRow(builder, HConstants.LATEST_TIMESTAMP, key, hasOnDupKey, values);
+    public PRow newRow(KeyValueBuilder builder, long ts, ImmutableBytesWritable key,
+            boolean hasOnDupKey, Map<PColumn, byte[]> columnValues, byte[]... values) {
+        return newRow(builder, ts, key, 0, hasOnDupKey, columnValues, values);
+    }
+
+    @Override
+    public PRow newRow(KeyValueBuilder builder, ImmutableBytesWritable key,
+        boolean hasOnDupKey, Map<PColumn, byte[]> columnValues, byte[]... values) {
+        return newRow(builder, HConstants.LATEST_TIMESTAMP, key, hasOnDupKey, columnValues, values);
     }
 
     @Override
@@ -1126,12 +1134,13 @@ public class PTableImpl implements PTable {
         // map from column name to value 
         private Map<PColumn, byte[]> columnToValueMap; 
 
-        public PRowImpl(KeyValueBuilder kvBuilder, ImmutableBytesWritable key, long ts, Integer bucketNum, boolean hasOnDupKey) {
+        public PRowImpl(KeyValueBuilder kvBuilder, ImmutableBytesWritable key,
+                ImmutableBytesWritable saltKey, long ts, Integer bucketNum, boolean hasOnDupKey) {
             this.kvBuilder = kvBuilder;
             this.ts = ts;
             this.hasOnDupKey = hasOnDupKey;
             if (bucketNum != null) {
-                this.key = SaltingUtil.getSaltedKey(key, bucketNum);
+                this.key = SaltingUtil.getSaltedKey(key, saltKey, bucketNum);
                 this.keyPtr = new ImmutableBytesPtr(this.key);
             } else {
                 this.keyPtr =  new ImmutableBytesPtr(key);
@@ -1674,7 +1683,7 @@ public class PTableImpl implements PTable {
         if(table.getViewIndexId() != null) {
           builder.setViewIndexId(table.getViewIndexId());
           builder.setViewIndexIdType(table.getviewIndexIdType().getSqlType());
-		}
+        }
         if(table.getIndexType() != null) {
             builder.setIndexType(ByteStringer.wrap(new byte[]{table.getIndexType().getSerializedValue()}));
         }

@@ -637,13 +637,15 @@ public interface PTable extends PMetaDataEntity {
      * @param ts the timestamp that the key value will have when committed
      * @param key the row key of the key value
      * @param hasOnDupKey true if row has an ON DUPLICATE KEY clause and false otherwise.
+     * @param columnValues required if table was created with SALT_COLUMNS, else can be null
      * @param values the optional key values
      * @return the new row. Use {@link org.apache.phoenix.schema.PRow#toRowMutations()} to
      * generate the Row to send to the HBase server.
      * @throws ConstraintViolationException if row data violates schema
      * constraint
      */
-    PRow newRow(KeyValueBuilder builder, long ts, ImmutableBytesWritable key, boolean hasOnDupKey, byte[]... values);
+    PRow newRow(KeyValueBuilder builder, long ts, ImmutableBytesWritable key,
+        boolean hasOnDupKey, Map<PColumn, byte[]> columnValues, byte[]... values);
 
     /**
      * Creates a new row for the PK values (from {@link #newKey(ImmutableBytesWritable, byte[][])}
@@ -651,13 +653,15 @@ public interface PTable extends PMetaDataEntity {
      * will be set by the HBase server.
      * @param key the row key of the key value
      * @param hasOnDupKey true if row has an ON DUPLICATE KEY clause and false otherwise.
+     * @param columnValues required if table was created with SALT_COLUMNS, else can be null
      * @param values the optional key values
      * @return the new row. Use {@link org.apache.phoenix.schema.PRow#toRowMutations()} to
      * generate the row to send to the HBase server.
      * @throws ConstraintViolationException if row data violates schema
      * constraint
      */
-    PRow newRow(KeyValueBuilder builder, ImmutableBytesWritable key, boolean hasOnDupKey, byte[]... values);
+    PRow newRow(KeyValueBuilder builder, ImmutableBytesWritable key,
+        boolean hasOnDupKey, Map<PColumn, byte[]> columnValues, byte[]... values);
 
     /**
      * Formulates a row key using the values provided. The values must be in

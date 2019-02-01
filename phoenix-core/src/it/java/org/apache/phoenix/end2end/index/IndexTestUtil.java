@@ -126,7 +126,7 @@ public class IndexTestUtil {
         long ts = MetaDataUtil.getClientTimeStamp(dataMutation);
         if (dataMutation instanceof Delete && dataMutation.getFamilyCellMap().values().isEmpty()) {
             indexTable.newKey(ptr, indexValues);
-            row = indexTable.newRow(builder, ts, ptr, false);
+            row = indexTable.newRow(builder, ts, ptr, false, null);
             row.delete();
         } else {
             // If no column families in table, then nothing to look for 
@@ -154,7 +154,7 @@ public class IndexTestUtil {
                 }
             }
             indexTable.newKey(ptr, indexValues);
-            row = indexTable.newRow(builder, ts, ptr, false);
+            row = indexTable.newRow(builder, ts, ptr, false, null);
             int pos = 0;
             while ((pos = indexValuesSet.nextSetBit(pos)) >= 0) {
                 int index = nIndexColumns + indexOffset + pos++;

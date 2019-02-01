@@ -730,7 +730,7 @@ public class UngroupedAggregateRegionObserver extends BaseScannerRegionObserver 
                                 }
                             }
                             projectedTable.newKey(ptr, values);
-                            PRow row = projectedTable.newRow(kvBuilder, ts, ptr, false);
+                            PRow row = projectedTable.newRow(kvBuilder, ts, ptr, false, null);
                             for (; i < projectedColumns.size(); i++) {
                                 Expression expression = selectExpressions.get(i - bucketNumOffset);
                                 if (expression.evaluate(result, ptr)) {

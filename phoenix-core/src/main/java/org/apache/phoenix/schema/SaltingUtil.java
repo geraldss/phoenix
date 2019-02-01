@@ -65,9 +65,14 @@ public class SaltingUtil {
 
     // Compute the hash of the key value stored in key and set its first byte as the value. The
     // first byte of key should be left empty as a place holder for the salting byte.
-    public static byte[] getSaltedKey(ImmutableBytesWritable key, int bucketNum) {
+    public static byte[] getSaltedKey(ImmutableBytesWritable key,
+            ImmutableBytesWritable saltKey, int bucketNum) {
+        if (saltKey == null) {
+            saltKey = key;
+        }
         byte[] keyBytes = new byte[key.getLength()];
-        byte saltByte = getSaltingByte(key.get(), key.getOffset() + 1, key.getLength() - 1, bucketNum);
+        byte saltByte = getSaltingByte(saltKey.get(), saltKey.getOffset() + 1,
+                                       saltKey.getLength() - 1, bucketNum);
         keyBytes[0] = saltByte;
         System.arraycopy(key.get(), key.getOffset() + 1, keyBytes, 1, key.getLength() - 1);
         return keyBytes;

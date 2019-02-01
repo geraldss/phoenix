@@ -18,6 +18,7 @@
 package org.apache.phoenix.schema;
 
 import java.util.List;
+import java.util.Map;
 
 import org.apache.hadoop.hbase.io.ImmutableBytesWritable;
 import org.apache.phoenix.hbase.index.util.KeyValueBuilder;
@@ -113,13 +114,15 @@ public class DelegateTable implements PTable {
     }
 
     @Override
-    public PRow newRow(KeyValueBuilder builder, long ts, ImmutableBytesWritable key, boolean hasOnDupKey, byte[]... values) {
-        return delegate.newRow(builder, ts, key, hasOnDupKey, values);
+    public PRow newRow(KeyValueBuilder builder, long ts, ImmutableBytesWritable key,
+        boolean hasOnDupKey, Map<PColumn, byte[]> columnValues, byte[]... values) {
+        return delegate.newRow(builder, ts, key, hasOnDupKey, columnValues, values);
     }
 
     @Override
-    public PRow newRow(KeyValueBuilder builder, ImmutableBytesWritable key, boolean hasOnDupKey, byte[]... values) {
-        return delegate.newRow(builder, key, hasOnDupKey, values);
+    public PRow newRow(KeyValueBuilder builder, ImmutableBytesWritable key,
+        boolean hasOnDupKey, Map<PColumn, byte[]> columnValues, byte[]... values) {
+        return delegate.newRow(builder, key, hasOnDupKey, columnValues, values);
     }
 
     @Override

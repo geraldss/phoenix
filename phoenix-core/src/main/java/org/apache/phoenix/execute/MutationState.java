@@ -617,7 +617,9 @@ public class MutationState implements SQLCloseable {
                     }
                 }
             }
-            PRow row = table.newRow(connection.getKeyValueBuilder(), timestampToUse, key, hasOnDupKey);
+            Map<PColumn, byte[]> columnValues = rowEntry.getValue().getColumnValues();
+            PRow row = table.newRow(connection.getKeyValueBuilder(),
+                timestampToUse, key, hasOnDupKey, columnValues);
             List<Mutation> rowMutations, rowMutationsPertainingToIndex;
             if (rowEntry.getValue().getColumnValues() == PRow.DELETE_MARKER) { // means delete
                 row.delete();
@@ -625,7 +627,7 @@ public class MutationState implements SQLCloseable {
                 // The DeleteCompiler already generates the deletes for indexes, so no need to do it again
                 rowMutationsPertainingToIndex = Collections.emptyList();
             } else {
-                for (Map.Entry<PColumn, byte[]> valueEntry : rowEntry.getValue().getColumnValues().entrySet()) {
+                for (Map.Entry<PColumn, byte[]> valueEntry : columnValues.entrySet()) {
                     row.setValue(valueEntry.getKey(), valueEntry.getValue());
                 }
                 rowMutations = row.toRowMutations();

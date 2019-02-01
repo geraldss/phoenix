@@ -218,7 +218,7 @@ public class PhoenixIndexBuilder extends NonTxIndexBuilder {
                 if (flattenedCells != null) {
                     Collections.sort(flattenedCells,CellComparatorImpl.COMPARATOR);
                 }
-                PRow row = table.newRow(GenericKeyValueBuilder.INSTANCE, ts, ptr, false);
+                PRow row = table.newRow(GenericKeyValueBuilder.INSTANCE, ts, ptr, false, null);
                 int adjust = table.getBucketNum() == null ? 1 : 2;
                 for (int i = 0; i < expressions.size(); i++) {
                     Expression expression = expressions.get(i);
