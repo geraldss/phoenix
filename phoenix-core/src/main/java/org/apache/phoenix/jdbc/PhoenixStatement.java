@@ -92,6 +92,7 @@ import org.apache.phoenix.expression.RowKeyColumnExpression;
 import org.apache.phoenix.iterate.MaterializedResultIterator;
 import org.apache.phoenix.iterate.ParallelScanGrouper;
 import org.apache.phoenix.iterate.ResultIterator;
+import org.apache.phoenix.log.LogLevel;
 import org.apache.phoenix.log.QueryLogInfo;
 import org.apache.phoenix.log.QueryStatus;
 import org.apache.phoenix.log.QueryLogger;
@@ -487,7 +488,10 @@ public class PhoenixStatement implements Statement, SQLCloseable {
                 select = StatementNormalizer.normalize(transformedSelect, resolver);
             }
 
-            QueryPlan plan = new QueryCompiler(stmt, select, resolver, Collections.<PDatum>emptyList(), stmt.getConnection().getIteratorFactory(), new SequenceManager(stmt), true, false, null).compile();
+            QueryPlan plan = new QueryCompiler(stmt, select, resolver, Collections.emptyList(),
+                    stmt.getConnection().getIteratorFactory(), new SequenceManager(stmt),
+                    true, false, null)
+                    .compile();
             plan.getContext().getSequenceManager().validateSequences(seqAction);
             return plan;
         }
@@ -762,6 +766,11 @@ public class PhoenixStatement implements Statement, SQLCloseable {
                 @Override
                 public Long getEstimateInfoTimestamp() throws SQLException {
                     return estimateTs;
+                }
+
+                @Override
+                public List<OrderBy> getOutputOrderBys() {
+                    return Collections.<OrderBy> emptyList();
                 }
             };
         }
@@ -1761,6 +1770,10 @@ public class PhoenixStatement implements Statement, SQLCloseable {
     }
 
     public QueryLogger createQueryLogger(CompilableStatement stmt, String sql) throws SQLException {
+        if (connection.getLogLevel() == LogLevel.OFF) {
+            return QueryLogger.NO_OP_INSTANCE;
+        }
+
         boolean isSystemTable=false;
         if(stmt instanceof ExecutableSelectStatement){
             TableNode from = ((ExecutableSelectStatement)stmt).getFrom();

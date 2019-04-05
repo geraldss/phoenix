@@ -211,7 +211,8 @@ public class ServerUtil {
         }
     }
     
-    public static Table getHTableForCoprocessorScan (RegionCoprocessorEnvironment env, Table writerTable) throws IOException {
+    public static Table getHTableForCoprocessorScan (RegionCoprocessorEnvironment env,
+                                                               Table writerTable) throws IOException {
         if (coprocessorScanWorks(env)) {
             return writerTable;
         }
@@ -347,6 +348,11 @@ public class ServerUtil {
                 connections.clear();
             }
         }
+
+        public static int getConnectionsCount() {
+            return connections.size();
+        }
+
      }
 
     public static Configuration getCompactionConfig(Configuration conf) {

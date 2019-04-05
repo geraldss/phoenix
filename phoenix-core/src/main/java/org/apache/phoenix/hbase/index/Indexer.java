@@ -18,10 +18,6 @@
 package org.apache.phoenix.hbase.index;
 
 import static org.apache.phoenix.hbase.index.util.IndexManagementUtil.rethrowIndexingException;
-import static org.apache.phoenix.hbase.index.write.IndexWriterUtils.DEFAULT_INDEX_WRITER_RPC_PAUSE;
-import static org.apache.phoenix.hbase.index.write.IndexWriterUtils.DEFAULT_INDEX_WRITER_RPC_RETRIES_NUMBER;
-import static org.apache.phoenix.hbase.index.write.IndexWriterUtils.INDEX_WRITER_RPC_PAUSE;
-import static org.apache.phoenix.hbase.index.write.IndexWriterUtils.INDEX_WRITER_RPC_RETRIES_NUMBER;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -37,6 +33,7 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.Cell;
+import org.apache.hadoop.hbase.CellUtil;
 import org.apache.hadoop.hbase.CoprocessorEnvironment;
 import org.apache.hadoop.hbase.HConstants;
 import org.apache.hadoop.hbase.HConstants.OperationStatusCode;
@@ -55,8 +52,6 @@ import org.apache.hadoop.hbase.coprocessor.ObserverContext;
 import org.apache.hadoop.hbase.coprocessor.RegionCoprocessor;
 import org.apache.hadoop.hbase.coprocessor.RegionCoprocessorEnvironment;
 import org.apache.hadoop.hbase.coprocessor.RegionObserver;
-import org.apache.hadoop.hbase.ipc.RpcControllerFactory;
-import org.apache.hadoop.hbase.ipc.controller.InterRegionServerIndexRpcControllerFactory;
 import org.apache.hadoop.hbase.regionserver.MiniBatchOperationInProgress;
 import org.apache.hadoop.hbase.regionserver.OperationStatus;
 import org.apache.hadoop.hbase.regionserver.Region;
@@ -84,12 +79,10 @@ import org.apache.phoenix.hbase.index.write.IndexWriter;
 import org.apache.phoenix.hbase.index.write.RecoveryIndexWriter;
 import org.apache.phoenix.hbase.index.write.recovery.PerRegionIndexWriteCache;
 import org.apache.phoenix.hbase.index.write.recovery.StoreFailuresInCachePolicy;
-import org.apache.phoenix.query.QueryServices;
 import org.apache.phoenix.query.QueryServicesOptions;
 import org.apache.phoenix.trace.TracingUtils;
 import org.apache.phoenix.trace.util.NullSpan;
 import org.apache.phoenix.util.EnvironmentEdgeManager;
-import org.apache.phoenix.util.PropertiesUtil;
 import org.apache.phoenix.util.ScanUtil;
 import org.apache.phoenix.util.ServerUtil;
 import org.apache.phoenix.util.ServerUtil.ConnectionType;
@@ -432,7 +425,6 @@ public class Indexer implements RegionObserver, RegionCoprocessor {
       ReplayWrite replayWrite = this.builder.getReplayWrite(firstMutation);
       boolean resetTimeStamp = replayWrite == null;
       long now = EnvironmentEdgeManager.currentTimeMillis();
-      byte[] byteNow = Bytes.toBytes(now);
       for (int i = 0; i < miniBatchOp.size(); i++) {
           Mutation m = miniBatchOp.getOperation(i);
           // skip this mutation if we aren't enabling indexing
@@ -444,16 +436,16 @@ public class Indexer implements RegionObserver, RegionCoprocessor {
                   // Unless we're replaying edits to rebuild the index, we update the time stamp
                   // of the data table to prevent overlapping time stamps (which prevents index
                   // inconsistencies as this case isn't handled correctly currently).
-                  for (List<Cell> family : m.getFamilyCellMap().values()) {
-                      List<KeyValue> familyKVs = KeyValueUtil.ensureKeyValues(family);
-                      for (KeyValue kv : familyKVs) {
-                          setTimeStamp(kv, byteNow);
+                  for (List<Cell> cells : m.getFamilyCellMap().values()) {
+                      for (Cell cell : cells) {
+                          CellUtil.setTimestamp(cell, now);
                       }
                   }
               }
               // No need to write the table mutations when we're rebuilding
               // the index as they're already written and just being replayed.
-              if (replayWrite == ReplayWrite.INDEX_ONLY) {
+              if (replayWrite == ReplayWrite.INDEX_ONLY
+                      || replayWrite == ReplayWrite.REBUILD_INDEX_ONLY) {
                   miniBatchOp.setOperationStatus(i, NOWRITE);
               }
     

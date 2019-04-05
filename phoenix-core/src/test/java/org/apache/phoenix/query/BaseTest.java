@@ -123,6 +123,7 @@ import org.apache.hadoop.hbase.MiniHBaseCluster;
 import org.apache.hadoop.hbase.ServerName;
 import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.client.Admin;
+import org.apache.hadoop.hbase.client.RegionInfo;
 import org.apache.hadoop.hbase.client.TableDescriptor;
 import org.apache.hadoop.hbase.ipc.PhoenixRpcSchedulerFactory;
 import org.apache.hadoop.hbase.master.HMaster;
@@ -178,7 +179,7 @@ import com.google.common.util.concurrent.ThreadFactoryBuilder;
 
 public abstract class BaseTest {
     public static final String DRIVER_CLASS_NAME_ATTRIB = "phoenix.driver.class.name";
-    
+    private static final double ZERO = 1e-9;
     private static final Map<String,String> tableDDLMap;
     private static final Logger logger = LoggerFactory.getLogger(BaseTest.class);
     @ClassRule
@@ -682,6 +683,21 @@ public abstract class BaseTest {
     public static long nextTimestamp() {
         timestamp += 100;
         return timestamp;
+    }
+
+    public static boolean twoDoubleEquals(double a, double b) {
+        if (Double.isNaN(a) ^ Double.isNaN(b)) return false;
+        if (Double.isNaN(a)) return true;
+        if (Double.isInfinite(a) ^ Double.isInfinite(b)) return false;
+        if (Double.isInfinite(a)) {
+            if ((a > 0) ^ (b > 0)) return false;
+            else return true;
+        }
+        if (Math.abs(a - b) <= ZERO) {
+            return true;
+        } else {
+            return false;
+        }
     }
 
     protected static void ensureTableCreated(String url, String tableName) throws SQLException {
@@ -1912,5 +1928,29 @@ public abstract class BaseTest {
             // wait for the move to be finished
             Thread.sleep(100);
         }
+    }
+
+    /**
+     * It always unassign first region of table.
+     * @param tableName move region of table.
+     * @throws IOException
+     */
+    protected static void unassignRegionAsync(final String tableName) throws IOException {
+        Thread thread = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                    try {
+                        final Admin admin = utility.getAdmin();
+                        final RegionInfo tableRegion =
+                                admin.getRegions(TableName.valueOf(tableName)).get(0);
+                        admin.unassign(tableRegion.getEncodedNameAsBytes(), false);
+                        admin.assign(tableRegion.getEncodedNameAsBytes());
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+            }
+        });
+        thread.setDaemon(true);
+        thread.start();
     }
 }

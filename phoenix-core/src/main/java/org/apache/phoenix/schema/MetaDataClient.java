@@ -156,6 +156,7 @@ import org.apache.phoenix.compile.PostDDLCompiler;
 import org.apache.phoenix.compile.PostIndexDDLCompiler;
 import org.apache.phoenix.compile.PostLocalIndexDDLCompiler;
 import org.apache.phoenix.compile.QueryPlan;
+import org.apache.phoenix.compile.ServerBuildIndexCompiler;
 import org.apache.phoenix.compile.StatementContext;
 import org.apache.phoenix.compile.StatementNormalizer;
 import org.apache.phoenix.coprocessor.BaseScannerRegionObserver;
@@ -218,6 +219,7 @@ import org.apache.phoenix.schema.PTable.QualifierEncodingScheme;
 import org.apache.phoenix.schema.PTable.QualifierEncodingScheme.QualifierOutOfRangeException;
 import org.apache.phoenix.schema.PTable.ViewType;
 import org.apache.phoenix.schema.stats.GuidePostsKey;
+import org.apache.phoenix.schema.stats.StatisticsUtil;
 import org.apache.phoenix.schema.types.PDataType;
 import org.apache.phoenix.schema.types.PDate;
 import org.apache.phoenix.schema.types.PInteger;
@@ -584,7 +586,7 @@ public class MetaDataClient {
         return currentScn;
     }
 
-    private MetaDataMutationResult updateCache(PName origTenantId, String schemaName, String tableName,
+    public MetaDataMutationResult updateCache(PName origTenantId, String schemaName, String tableName,
             boolean alwaysHitServer, Long resolvedTimestamp) throws SQLException { // TODO: pass byte[] herez
         boolean systemTable = SYSTEM_CATALOG_SCHEMA.equals(schemaName);
         // System tables must always have a null tenantId
@@ -1317,21 +1319,9 @@ public class MetaDataClient {
             TableRef tableRef = new TableRef(null, nonTxnLogicalTable, clientTimeStamp, false);
             MutationPlan plan = compiler.compile(Collections.singletonList(tableRef), null, cfs, null, clientTimeStamp);
             Scan scan = plan.getContext().getScan();
-            scan.setCacheBlocks(false);
-            scan.readAllVersions();
-            scan.setAttribute(ANALYZE_TABLE, TRUE_BYTES);
+            StatisticsUtil.setScanAttributes(scan, statsProps);
             boolean runUpdateStatsAsync = props.getBoolean(QueryServices.RUN_UPDATE_STATS_ASYNC, DEFAULT_RUN_UPDATE_STATS_ASYNC);
             scan.setAttribute(RUN_UPDATE_STATS_ASYNC_ATTRIB, runUpdateStatsAsync ? TRUE_BYTES : FALSE_BYTES);
-            if (statsProps != null) {
-                Object gp_width = statsProps.get(QueryServices.STATS_GUIDEPOST_WIDTH_BYTES_ATTRIB);
-                if (gp_width != null) {
-                    scan.setAttribute(BaseScannerRegionObserver.GUIDEPOST_WIDTH_BYTES, PLong.INSTANCE.toBytes(gp_width));
-                }
-                Object gp_per_region = statsProps.get(QueryServices.STATS_GUIDEPOST_PER_REGION_ATTRIB);
-                if (gp_per_region != null) {
-                    scan.setAttribute(BaseScannerRegionObserver.GUIDEPOST_PER_REGION, PInteger.INSTANCE.toBytes(gp_per_region));
-                }
-            }
             MutationState mutationState = plan.execute();
             rowCount = mutationState.getUpdateCount();
         }
@@ -1401,16 +1391,17 @@ public class MetaDataClient {
     }
     
     private MutationPlan getMutationPlanForBuildingIndex(PTable index, TableRef dataTableRef) throws SQLException {
-        MutationPlan mutationPlan;
         if (index.getIndexType() == IndexType.LOCAL) {
             PostLocalIndexDDLCompiler compiler =
                     new PostLocalIndexDDLCompiler(connection, getFullTableName(dataTableRef));
-            mutationPlan = compiler.compile(index);
-        } else {
+            return compiler.compile(index);
+        } else if (dataTableRef.getTable().isTransactional()){
             PostIndexDDLCompiler compiler = new PostIndexDDLCompiler(connection, dataTableRef);
-            mutationPlan = compiler.compile(index);
+            return compiler.compile(index);
+        } else {
+            ServerBuildIndexCompiler compiler = new ServerBuildIndexCompiler(connection, getFullTableName(dataTableRef));
+            return compiler.compile(index);
         }
-        return mutationPlan;
     }
 
     private MutationState buildIndex(PTable index, TableRef dataTableRef) throws SQLException {
@@ -1722,6 +1713,7 @@ public class MetaDataClient {
                 }
                 PrimaryKeyConstraint pk = FACTORY.primaryKey(null, allPkColumns);
                 tableProps.put(MetaDataUtil.DATA_TABLE_NAME_PROP_NAME, dataTable.getName().getString());
+
                 CreateTableStatement tableStatement = FACTORY.createTable(indexTableName, statement.getProps(), columnDefs, pk, statement.getSplitNodes(), PTableType.INDEX, statement.ifNotExists(), null, null, statement.getBindCount(), null);
                 table = createTableInternal(tableStatement, splits, dataTable, null, null, MetaDataUtil.getViewIndexIdDataType(),null, null, allocateIndexId, statement.getIndexType(), asyncCreatedDate, tableProps, commonFamilyProps);
                 break;
@@ -1751,6 +1743,10 @@ public class MetaDataClient {
         if (connection.getSCN() != null) {
             return buildIndexAtTimeStamp(table, statement.getTable());
         }
+
+        String dataTableFullName = SchemaUtil.getTableName(
+                tableRef.getTable().getSchemaName().getString(),
+                tableRef.getTable().getTableName().getString());
         return buildIndex(table, tableRef);
     }
 
@@ -3163,6 +3159,9 @@ public class MetaDataClient {
             }
         } catch (TableNotFoundException e) {
             if (!ifExists) {
+                if (tableType == PTableType.INDEX)
+                    throw new IndexNotFoundException(e.getSchemaName(),
+                            e.getTableName(), e.getTimeStamp());
                 throw e;
             }
         }
@@ -3524,7 +3523,8 @@ public class MetaDataClient {
                     throws SQLException {
         connection.rollback();
         boolean wasAutoCommit = connection.getAutoCommit();
-		List<PColumn> columns = Lists.newArrayListWithExpectedSize(origColumnDefs != null ? origColumnDefs.size() : 0);
+        List<PColumn> columns = Lists.newArrayListWithExpectedSize(origColumnDefs != null ?
+            origColumnDefs.size() : 0);
         PName tenantId = connection.getTenantId();
         String schemaName = table.getSchemaName().getString();
         String tableName = table.getTableName().getString();
@@ -3538,40 +3538,38 @@ public class MetaDataClient {
         try {
             connection.setAutoCommit(false);
 
-            List<ColumnDef> columnDefs = null;
-            if (table.isAppendOnlySchema()) {
+            List<ColumnDef> columnDefs;
+            if (table.isAppendOnlySchema() || ifNotExists) {
                 // only make the rpc if we are adding new columns
                 columnDefs = Lists.newArrayList();
                 for (ColumnDef columnDef : origColumnDefs) {
                     String familyName = columnDef.getColumnDefName().getFamilyName();
                     String columnName = columnDef.getColumnDefName().getColumnName();
-                    if (familyName!=null) {
+                    if (familyName != null) {
                         try {
                             PColumnFamily columnFamily = table.getColumnFamily(familyName);
                             columnFamily.getPColumnForColumnName(columnName);
                             if (!ifNotExists) {
-                                throw new ColumnAlreadyExistsException(schemaName, tableName, columnName);
+                                throw new ColumnAlreadyExistsException(schemaName, tableName,
+                                  columnName);
                             }
-                        }
-                        catch (ColumnFamilyNotFoundException | ColumnNotFoundException e){
+                        } catch (ColumnFamilyNotFoundException | ColumnNotFoundException e) {
                             columnDefs.add(columnDef);
                         }
-                    }
-                    else {
+                    } else {
                         try {
                             table.getColumnForColumnName(columnName);
                             if (!ifNotExists) {
-                                throw new ColumnAlreadyExistsException(schemaName, tableName, columnName);
+                                throw new ColumnAlreadyExistsException(schemaName, tableName,
+                                  columnName);
                             }
-                        }
-                        catch (ColumnNotFoundException e){
+                        } catch (ColumnNotFoundException e) {
                             columnDefs.add(columnDef);
                         }
                     }
                 }
-            }
-            else {
-                columnDefs = origColumnDefs == null ? Collections.<ColumnDef>emptyList() : origColumnDefs;
+            } else {
+                columnDefs = origColumnDefs == null ? Collections.emptyList() : origColumnDefs;
             }
 
             boolean retried = false;
@@ -4291,7 +4289,9 @@ public class MetaDataClient {
             String indexName = statement.getTable().getName().getTableName();
             boolean isAsync = statement.isAsync();
             String tenantId = connection.getTenantId() == null ? null : connection.getTenantId().getString();
-            PTable table = FromCompiler.getResolver(statement, connection).getTables().get(0).getTable();
+            PTable table = FromCompiler.getIndexResolver(statement, connection)
+                    .getTables().get(0).getTable();
+
             String schemaName = statement.getTable().getName().getSchemaName();
             String tableName = table.getTableName().getString();
 

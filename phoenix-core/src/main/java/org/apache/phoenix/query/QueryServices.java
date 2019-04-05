@@ -44,7 +44,16 @@ public interface QueryServices extends SQLCloseable {
     public static final String THREAD_POOL_SIZE_ATTRIB = "phoenix.query.threadPoolSize";
     public static final String QUEUE_SIZE_ATTRIB = "phoenix.query.queueSize";
     public static final String THREAD_TIMEOUT_MS_ATTRIB = "phoenix.query.timeoutMs";
-    public static final String SPOOL_THRESHOLD_BYTES_ATTRIB = "phoenix.query.spoolThresholdBytes";
+    public static final String SERVER_SPOOL_THRESHOLD_BYTES_ATTRIB =
+            "phoenix.query.server.spoolThresholdBytes";
+    public static final String CLIENT_SPOOL_THRESHOLD_BYTES_ATTRIB =
+            "phoenix.query.client.spoolThresholdBytes";
+    public static final String CLIENT_ORDERBY_SPOOLING_ENABLED_ATTRIB =
+            "phoenix.query.client.orderBy.spooling.enabled";
+    public static final String CLIENT_JOIN_SPOOLING_ENABLED_ATTRIB =
+            "phoenix.query.client.join.spooling.enabled";
+    public static final String SERVER_ORDERBY_SPOOLING_ENABLED_ATTRIB =
+            "phoenix.query.server.orderBy.spooling.enabled";
     public static final String HBASE_CLIENT_KEYTAB = "hbase.myclient.keytab";
     public static final String HBASE_CLIENT_PRINCIPAL = "hbase.myclient.principal";
     public static final String SPOOL_DIRECTORY = "phoenix.spool.directory";
@@ -192,16 +201,15 @@ public interface QueryServices extends SQLCloseable {
     public static final String STATS_GUIDEPOST_PER_REGION_ATTRIB = "phoenix.stats.guidepost.per.region";
     public static final String STATS_USE_CURRENT_TIME_ATTRIB = "phoenix.stats.useCurrentTime";
     
-    @Deprecated // use STATS_COLLECTION_ENABLED config instead
-    public static final String STATS_ENABLED_ATTRIB = "phoenix.stats.enabled";
-
     public static final String RUN_UPDATE_STATS_ASYNC = "phoenix.update.stats.command.async";
     public static final String STATS_SERVER_POOL_SIZE = "phoenix.stats.pool.size";
     public static final String COMMIT_STATS_ASYNC = "phoenix.stats.commit.async";
     // Maximum size in bytes taken up by cached table stats in the client
     public static final String STATS_MAX_CACHE_SIZE = "phoenix.stats.cache.maxSize";
-    public static final String LOG_SALT_BUCKETS_ATTRIB = "phoenix.log.saltBuckets";
+    // The size of the thread pool used for refreshing cached table stats in stats client cache
+    public static final String STATS_CACHE_THREAD_POOL_SIZE = "phoenix.stats.cache.threadPoolSize";
 
+    public static final String LOG_SALT_BUCKETS_ATTRIB = "phoenix.log.saltBuckets";
     public static final String SEQUENCE_SALT_BUCKETS_ATTRIB = "phoenix.sequence.saltBuckets";
     public static final String COPROCESSOR_PRIORITY_ATTRIB = "phoenix.coprocessor.priority";
     public static final String EXPLAIN_CHUNK_COUNT_ATTRIB = "phoenix.explain.displayChunkCount";
@@ -310,8 +318,11 @@ public interface QueryServices extends SQLCloseable {
     // whether to enable server side RS -> RS calls for upsert select statements
     public static final String ENABLE_SERVER_UPSERT_SELECT ="phoenix.client.enable.server.upsert.select";
 
+    public static final String PROPERTY_POLICY_PROVIDER_ENABLED = "phoenix.property.policy.provider.enabled";
+
     // whether to trigger mutations on the server at all (UPSERT/DELETE or DELETE FROM)
-    public static final String ENABLE_SERVER_SIDE_MUTATIONS ="phoenix.client.enable.server.mutations";
+    public static final String ENABLE_SERVER_SIDE_DELETE_MUTATIONS ="phoenix.client.enable.server.delete.mutations";
+    public static final String ENABLE_SERVER_SIDE_UPSERT_MUTATIONS ="phoenix.client.enable.server.upsert.mutations";
 
     //Update Cache Frequency default config attribute
     public static final String DEFAULT_UPDATE_CACHE_FREQUENCY_ATRRIB  = "phoenix.default.update.cache.frequency";
@@ -319,6 +330,8 @@ public interface QueryServices extends SQLCloseable {
     // Whether to enable cost-based-decision in the query optimizer
     public static final String COST_BASED_OPTIMIZER_ENABLED = "phoenix.costbased.optimizer.enabled";
     public static final String SMALL_SCAN_THRESHOLD_ATTRIB = "phoenix.query.smallScanThreshold";
+    public static final String WILDCARD_QUERY_DYNAMIC_COLS_ATTRIB =
+            "phoenix.query.wildcard.dynamicColumns";
     public static final String LOG_LEVEL = "phoenix.log.level";
     public static final String LOG_BUFFER_SIZE = "phoenix.log.buffer.size";
     public static final String LOG_BUFFER_WAIT_STRATEGY = "phoenix.log.wait.strategy";

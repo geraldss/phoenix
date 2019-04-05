@@ -38,6 +38,7 @@ import org.apache.phoenix.query.QueryServices;
 import org.apache.phoenix.util.PropertiesUtil;
 import org.apache.phoenix.util.QueryUtil;
 import org.apache.phoenix.util.ReadOnlyProps;
+import org.junit.Assert;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
@@ -76,7 +77,7 @@ public class SpillableGroupByIT extends BaseOwnClusterIT {
         
         // Set guidepost width, but disable stats
         props.put(QueryServices.STATS_GUIDEPOST_WIDTH_BYTES_ATTRIB, Long.toString(20));
-        props.put(QueryServices.STATS_ENABLED_ATTRIB, Boolean.toString(false));
+        props.put(QueryServices.STATS_COLLECTION_ENABLED, Boolean.toString(false));
         props.put(QueryServices.EXPLAIN_CHUNK_COUNT_ATTRIB, Boolean.TRUE.toString());
         props.put(QueryServices.EXPLAIN_ROW_COUNT_ATTRIB, Boolean.TRUE.toString());
         // Must update config before starting server
@@ -174,7 +175,15 @@ public class SpillableGroupByIT extends BaseOwnClusterIT {
         stmt.execute("UPSERT INTO " + tableName + " VALUES (2, 'NAME2')");
         stmt.execute("UPSERT INTO " + tableName + " VALUES (3, 'NAME3')");
         conn.commit();
-        stmt.execute("UPDATE STATISTICS " + tableName);
+        try {
+            stmt.execute("UPDATE STATISTICS " + tableName);
+            Assert.fail("Update Statistics SQL should have failed");
+        } catch (SQLException e) {
+            Assert.assertEquals("StatsCollectionDisabledOnServerException expected",
+                    1401, e.getErrorCode());
+            Assert.assertEquals("StatsCollectionDisabledOnServerException expected",
+                    "STS01", e.getSQLState());
+        }
         ResultSet rs = stmt.executeQuery("SELECT * FROM \"SYSTEM\".STATS");
         assertFalse(rs.next());
         rs.close();

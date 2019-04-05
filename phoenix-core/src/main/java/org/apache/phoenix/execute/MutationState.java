@@ -22,6 +22,8 @@ import static org.apache.phoenix.monitoring.GlobalClientMetrics.GLOBAL_MUTATION_
 import static org.apache.phoenix.monitoring.GlobalClientMetrics.GLOBAL_MUTATION_BATCH_SIZE;
 import static org.apache.phoenix.monitoring.GlobalClientMetrics.GLOBAL_MUTATION_BYTES;
 import static org.apache.phoenix.monitoring.GlobalClientMetrics.GLOBAL_MUTATION_COMMIT_TIME;
+import static org.apache.phoenix.query.QueryServices.WILDCARD_QUERY_DYNAMIC_COLS_ATTRIB;
+import static org.apache.phoenix.query.QueryServicesOptions.DEFAULT_WILDCARD_QUERY_DYNAMIC_COLS_ATTRIB;
 
 import java.io.IOException;
 import java.sql.SQLException;
@@ -40,7 +42,6 @@ import javax.annotation.concurrent.Immutable;
 
 import org.apache.hadoop.hbase.HConstants;
 import org.apache.hadoop.hbase.TableName;
-import org.apache.hadoop.hbase.client.Delete;
 import org.apache.hadoop.hbase.client.Mutation;
 import org.apache.hadoop.hbase.client.Table;
 import org.apache.hadoop.hbase.io.ImmutableBytesWritable;
@@ -61,6 +62,7 @@ import org.apache.phoenix.index.IndexMetaDataCacheClient;
 import org.apache.phoenix.index.PhoenixIndexBuilder;
 import org.apache.phoenix.index.PhoenixIndexFailurePolicy;
 import org.apache.phoenix.index.PhoenixIndexFailurePolicy.MutateCommand;
+import org.apache.phoenix.index.PhoenixIndexMetaData;
 import org.apache.phoenix.jdbc.PhoenixConnection;
 import org.apache.phoenix.jdbc.PhoenixStatement.Operation;
 import org.apache.phoenix.monitoring.GlobalClientMetrics;
@@ -507,7 +509,7 @@ public class MutationState implements SQLCloseable {
         final Iterator<PTable> indexes = indexList.iterator();
         final List<Mutation> mutationList = Lists.newArrayListWithExpectedSize(values.size());
         final List<Mutation> mutationsPertainingToIndex = indexes.hasNext() ? Lists
-                .<Mutation> newArrayListWithExpectedSize(values.size()) : null;
+                .newArrayListWithExpectedSize(values.size()) : null;
         generateMutations(tableRef, mutationTimestamp, serverTimestamp, values, mutationList,
                 mutationsPertainingToIndex);
         return new Iterator<Pair<PName, List<Mutation>>>() {
@@ -523,7 +525,7 @@ public class MutationState implements SQLCloseable {
             public Pair<PName, List<Mutation>> next() {
                 if (isFirst) {
                     isFirst = false;
-                    return new Pair<PName, List<Mutation>>(table.getPhysicalName(), mutationList);
+                    return new Pair<>(table.getPhysicalName(), mutationList);
                 }
 
                 PTable index = indexes.next();
@@ -595,6 +597,8 @@ public class MutationState implements SQLCloseable {
         Iterator<Map.Entry<ImmutableBytesPtr, RowMutationState>> iterator = values.entrySet().iterator();
         long timestampToUse = mutationTimestamp;
         MultiRowMutationState modifiedValues = new MultiRowMutationState(16);
+        boolean wildcardIncludesDynamicCols = connection.getQueryServices().getProps().getBoolean(
+                WILDCARD_QUERY_DYNAMIC_COLS_ATTRIB, DEFAULT_WILDCARD_QUERY_DYNAMIC_COLS_ATTRIB);
         while (iterator.hasNext()) {
             Map.Entry<ImmutableBytesPtr, RowMutationState> rowEntry = iterator.next();
             byte[] onDupKeyBytes = rowEntry.getValue().getOnDupKeyBytes();
@@ -629,6 +633,9 @@ public class MutationState implements SQLCloseable {
             } else {
                 for (Map.Entry<PColumn, byte[]> valueEntry : columnValues.entrySet()) {
                     row.setValue(valueEntry.getKey(), valueEntry.getValue());
+                }
+                if (wildcardIncludesDynamicCols && row.setAttributesForDynamicColumnsIfReqd()) {
+                    row.setAttributeToProcessDynamicColumnsMetadata();
                 }
                 rowMutations = row.toRowMutations();
                 // Pass through ON DUPLICATE KEY info through mutations
@@ -998,6 +1005,11 @@ public class MutationState implements SQLCloseable {
                                             throw new IOException(e);
                                         }
                                     }
+
+                                    @Override
+                                    public List<Mutation> getMutationList() {
+                                        return mutationBatch;
+                                    }
                                 }, iwe, connection, connection.getQueryServices().getProps());
                             } else {
                                 hTable.batch(mutationBatch, null);
@@ -1052,7 +1064,12 @@ public class MutationState implements SQLCloseable {
                                     // For an index write failure, the data table write succeeded,
                                     // so when we retry we need to set REPLAY_WRITES
                                     for (Mutation m : mutationList) {
-                                        m.setAttribute(BaseScannerRegionObserver.REPLAY_WRITES, BaseScannerRegionObserver.REPLAY_ONLY_INDEX_WRITES);
+                                        if (!PhoenixIndexMetaData.isIndexRebuild(
+                                            m.getAttributesMap())){
+                                            m.setAttribute(BaseScannerRegionObserver.REPLAY_WRITES,
+                                                BaseScannerRegionObserver.REPLAY_ONLY_INDEX_WRITES
+                                                );
+                                        }
                                         PhoenixKeyValueUtil.setTimestamp(m, serverTimestamp);
                                     }
                                     shouldRetry = true;
