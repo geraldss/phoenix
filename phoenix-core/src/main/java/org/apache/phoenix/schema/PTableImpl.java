@@ -125,6 +125,7 @@ public class PTableImpl implements PTable {
     private final long indexDisableTimestamp;
     // Have MultiMap for String->PColumn (may need family qualifier)
     private final List<PColumn> pkColumns;
+    private final List<PColumn> saltColumns;
     private final List<PColumn> allColumns;
     // columns that were inherited from a parent table but that were dropped in the view
     private final List<PColumn> excludedColumns;
@@ -181,6 +182,7 @@ public class PTableImpl implements PTable {
         private long timeStamp;
         private long indexDisableTimestamp;
         private List<PColumn> pkColumns;
+        private List<PColumn> saltColumns;
         private List<PColumn> allColumns;
         private List<PColumn> excludedColumns;
         private List<PColumnFamily> families;
@@ -279,6 +281,11 @@ public class PTableImpl implements PTable {
 
         public Builder setPkColumns(List<PColumn> pkColumns) {
             this.pkColumns = pkColumns;
+            return this;
+        }
+
+        public Builder setSaltColumns(List<PColumn> saltColumns) {
+            this.saltColumns = saltColumns;
             return this;
         }
 
@@ -739,6 +746,7 @@ public class PTableImpl implements PTable {
         this.timeStamp = builder.timeStamp;
         this.indexDisableTimestamp = builder.indexDisableTimestamp;
         this.pkColumns = builder.pkColumns;
+        this.saltColumns = builder.saltColumns;
         this.allColumns = builder.allColumns;
         this.excludedColumns = builder.excludedColumns;
         this.families = builder.families;
@@ -839,6 +847,7 @@ public class PTableImpl implements PTable {
                 .setDefaultFamilyName(table.getDefaultFamilyName())
                 .setRowKeyOrderOptimizable(table.rowKeyOrderOptimizable())
                 .setBucketNum(table.getBucketNum())
+                .setSaltColumns(table.getSaltColumns())
                 .setIndexes(table.getIndexes() == null ?
                         Collections.emptyList() : table.getIndexes())
                 .setParentSchemaName(table.getParentSchemaName())
@@ -896,6 +905,11 @@ public class PTableImpl implements PTable {
     }
 
     @Override
+    public List<PColumn> getSaltColumns() {
+        return saltColumns;
+    }
+
+    @Override
     public final PName getName() {
         return name;
     }
@@ -923,6 +937,18 @@ public class PTableImpl implements PTable {
     @Override
     public int newKey(ImmutableBytesWritable key, byte[][] values) {
         List<PColumn> columns = getPKColumns();
+        return newKey(key, columns, values);
+    }
+
+    /**
+     * Generate key bytes using key columns and values and salting, if
+     * any. Used for both full PK and SALT_COLUMNS.
+     * @param key destination for the key bytes
+     * @param columns key columns to use
+     * @param values key column values to use
+     */
+    public int newKey(ImmutableBytesWritable key, List<PColumn> columns, byte[][] values) {
+
         int nValues = values.length;
         while (nValues > 0 && (values[nValues-1] == null || values[nValues-1].length == 0)) {
             nValues--;
@@ -1043,6 +1069,7 @@ public class PTableImpl implements PTable {
 
     private PRow newRow(KeyValueBuilder builder, long ts, ImmutableBytesWritable key, int i,
         boolean hasOnDupKey, Map<PColumn, byte[]> columnValues, byte[]... values) {
+
         ImmutableBytesWritable saltKey = getSaltKey(key, columnValues);
         PRow row = new PRowImpl(builder, key, saltKey, ts, getBucketNum(), hasOnDupKey);
         if (i < values.length) {
@@ -1057,9 +1084,29 @@ public class PTableImpl implements PTable {
         return row;
     }
 
+    /**
+     * Generate saltKey bytes. Use SALT_COLUMNS, else default to PK bytes
+     * @param key primary key bytes
+     * @param columnValues map of all column values
+     * @return saltKey bytes
+     */
     private ImmutableBytesWritable getSaltKey(
         ImmutableBytesWritable key, Map<PColumn, byte[]> columnValues) {
-        return key;
+
+        if (saltColumns == null || saltColumns.size() == 0) {
+            return key;
+        }
+
+        byte[][] values = new byte[saltColumns.size()][];
+        int i = 0;
+
+        for (PColumn col : saltColumns) {
+            values[i++] = columnValues.get(col);
+        }
+
+        ImmutableBytesWritable saltKey = new ImmutableBytesWritable();
+        newKey(saltKey, saltColumns, values);
+        return saltKey;
     }
 
     @Override

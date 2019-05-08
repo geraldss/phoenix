@@ -79,6 +79,11 @@ public class DelegateTable implements PTable {
     }
 
     @Override
+    public List<PColumn> getSaltColumns() {
+        return delegate.getSaltColumns();
+    }
+
+    @Override
     public List<PColumn> getColumns() {
         return delegate.getColumns();
     }

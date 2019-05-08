@@ -598,6 +598,13 @@ public interface PTable extends PMetaDataEntity {
     List<PColumn> getPKColumns();
 
     /**
+     * If this table was created with explicit SALT_COLUMNS, get the
+     * salt columns, else null. PHOENIX_4757.
+     * @return a list of the salting columns
+     */
+    List<PColumn> getSaltColumns();
+
+    /**
      * Get all columns ordered by position.
      * @return a list of all columns
      */

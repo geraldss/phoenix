@@ -63,8 +63,14 @@ public class SaltingUtil {
         return splits;
     }
 
-    // Compute the hash of the key value stored in key and set its first byte as the value. The
-    // first byte of key should be left empty as a place holder for the salting byte.
+
+    /**
+     * Compute the hash of the key value stored in key and set its first byte as the value.
+     * The first byte of key should be left empty as a place holder for the salting byte.
+     * @param key primary key
+     * @param saltKey required if table created with SALT_COLUMNS, else null to use PK
+     * @param bucketNum number of salt buckets
+     */
     public static byte[] getSaltedKey(ImmutableBytesWritable key,
             ImmutableBytesWritable saltKey, int bucketNum) {
         if (saltKey == null) {
