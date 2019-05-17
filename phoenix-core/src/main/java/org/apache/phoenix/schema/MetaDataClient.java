@@ -72,6 +72,7 @@ import static org.apache.phoenix.jdbc.PhoenixDatabaseMetaData.PHYSICAL_NAME;
 import static org.apache.phoenix.jdbc.PhoenixDatabaseMetaData.PK_NAME;
 import static org.apache.phoenix.jdbc.PhoenixDatabaseMetaData.RETURN_TYPE;
 import static org.apache.phoenix.jdbc.PhoenixDatabaseMetaData.SALT_BUCKETS;
+import static org.apache.phoenix.jdbc.PhoenixDatabaseMetaData.SALT_COLUMNS;
 import static org.apache.phoenix.jdbc.PhoenixDatabaseMetaData.SORT_ORDER;
 import static org.apache.phoenix.jdbc.PhoenixDatabaseMetaData.STORE_NULLS;
 import static org.apache.phoenix.jdbc.PhoenixDatabaseMetaData.SYNC_INDEX_CREATED_DATE;
@@ -288,6 +289,7 @@ public class MetaDataClient {
                     TABLE_SEQ_NUM + "," +
                     COLUMN_COUNT + "," +
                     SALT_BUCKETS + "," +
+                    //SALT_COLUMNS + "," + // FIXME PHOENIX-4757
                     PK_NAME + "," +
                     DATA_TABLE_NAME + "," +
                     INDEX_STATE + "," +
@@ -2012,6 +2014,8 @@ public class MetaDataClient {
             boolean storeNulls = false;
             TransactionFactory.Provider transactionProvider = (parent!= null) ? parent.getTransactionProvider() : null;
             Integer saltBucketNum = null;
+            List<Object> saltColumnNames = null;
+            List<PColumn> saltColumns = null;
             String defaultFamilyName = null;
             boolean isImmutableRows = false;
             boolean isAppendOnlySchema = false;
@@ -2139,6 +2143,10 @@ public class MetaDataClient {
                     saltBucketNum = null; // Provides a way for an index to not be salted if its data table is salted
                 }
                 addSaltColumn = (saltBucketNum != null);
+
+                if (saltBucketNum != null) {
+                    saltColumnNames = (List<Object>) TableProperty.SALT_COLUMNS.getValue(tableProps);
+                }
             }
 
             // Can't set MULTI_TENANT or DEFAULT_COLUMN_FAMILY_NAME on an INDEX or a non mapped VIEW
@@ -2647,6 +2655,31 @@ public class MetaDataClient {
                     .build().buildException();
             }
 
+            // Use SALT_COLUMNS property if provided. PHOENIX-4757
+            if (saltColumnNames != null) {
+                Map<String, PColumn> pkMap = new HashMap<>(pkColumns.size()*2);
+                for (PColumn col : pkColumns) {
+                    String colName = col.getName().getString().toUpperCase();
+                    pkMap.put(colName, col);
+                }
+
+                saltColumns = new ArrayList<PColumn>(saltColumnNames.size()+1);
+                saltColumns.add(SaltingUtil.SALTING_COLUMN);
+
+                for (Object objName : saltColumnNames) {
+                    String strName = ((String) objName).toUpperCase();
+                    PColumn col = pkMap.get(strName);
+                    if (col == null || col.isRowTimestamp()) {
+                        throw new SQLExceptionInfo.Builder(SQLExceptionCode.SALT_COLUMNS_MUST_SUBSET_PK)
+                            .setSchemaName(schemaName)
+                            .setTableName(tableName)
+                            .setColumnName(strName)
+                            .build().buildException();
+                    }
+                    saltColumns.add(col);
+                }
+            }
+
             if (!statement.getProps().isEmpty()) {
                 for (String familyName : statement.getProps().keySet()) {
                     if (!familyName.equals(QueryConstants.ALL_FAMILY_PROPERTIES_KEY)) {
@@ -2820,6 +2853,7 @@ public class MetaDataClient {
             } else {
                 tableUpsert.setNull(7, Types.INTEGER);
             }
+            // FIXME PHOENIX-4757 set SALT_COLUMNS
             tableUpsert.setString(8, pkName);
             tableUpsert.setString(9, dataTableName);
             tableUpsert.setString(10, indexState == null ? null : indexState.getSerializedValue());
@@ -3021,6 +3055,7 @@ public class MetaDataClient {
                                 null : PNameFactory.newName(defaultFamilyName))
                         .setRowKeyOrderOptimizable(rowKeyOrderOptimizable)
                         .setBucketNum(saltBucketNum)
+                        .setSaltColumns(saltColumns)
                         .setIndexes(Collections.emptyList())
                         .setParentSchemaName((parent == null) ? null : parent.getSchemaName())
                         .setParentTableName((parent == null) ? null : parent.getTableName())

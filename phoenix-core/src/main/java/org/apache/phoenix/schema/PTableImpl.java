@@ -36,6 +36,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.HashMap;
 
 import javax.annotation.Nonnull;
 
@@ -940,14 +941,38 @@ public class PTableImpl implements PTable {
         return newKey(key, columns, values);
     }
 
+    @Override
+    public int newSaltKey(ImmutableBytesWritable saltKey, byte[][] pkValues) {
+
+        if (saltColumns == null || saltColumns.size() == 0) {
+            return newKey(saltKey, pkValues);
+        }
+
+        List<PColumn> pkColumns = getPKColumns();
+        Map<Integer, byte[]> pkMap = new HashMap<>(pkColumns.size());
+        int i = 0;
+        for (PColumn col : pkColumns) {
+            pkMap.put(col.getPosition(), pkValues[i++]);
+        }
+
+        byte[][] values = new byte[saltColumns.size()][];
+        i = 0;
+        for (PColumn col : saltColumns) {
+            values[i++] = pkMap.get(col.getPosition());
+        }
+        return newKey(saltKey, saltColumns, values);
+    }
+
     /**
      * Generate key bytes using key columns and values and salting, if
      * any. Used for both full PK and SALT_COLUMNS.
-     * @param key destination for the key bytes
+     * @param key bytes pointer that will be filled in with the key
      * @param columns key columns to use
-     * @param values key column values to use
+     * @param values column values to use
+     * @return the number of values that were used from values to set
+     * the key
      */
-    public int newKey(ImmutableBytesWritable key, List<PColumn> columns, byte[][] values) {
+    private int newKey(ImmutableBytesWritable key, List<PColumn> columns, byte[][] values) {
 
         int nValues = values.length;
         while (nValues > 0 && (values[nValues-1] == null || values[nValues-1].length == 0)) {
@@ -1067,10 +1092,9 @@ public class PTableImpl implements PTable {
         }
     }
 
-    private PRow newRow(KeyValueBuilder builder, long ts, ImmutableBytesWritable key, int i,
-        boolean hasOnDupKey, Map<PColumn, byte[]> columnValues, byte[]... values) {
+    private PRow newRow(KeyValueBuilder builder, long ts, ImmutableBytesWritable key,
+        ImmutableBytesWritable saltKey, int i, boolean hasOnDupKey, byte[]... values) {
 
-        ImmutableBytesWritable saltKey = getSaltKey(key, columnValues);
         PRow row = new PRowImpl(builder, key, saltKey, ts, getBucketNum(), hasOnDupKey);
         if (i < values.length) {
             for (PColumnFamily family : getColumnFamilies()) {
@@ -1084,41 +1108,28 @@ public class PTableImpl implements PTable {
         return row;
     }
 
-    /**
-     * Generate saltKey bytes. Use SALT_COLUMNS, else default to PK bytes
-     * @param key primary key bytes
-     * @param columnValues map of all column values
-     * @return saltKey bytes
-     */
-    private ImmutableBytesWritable getSaltKey(
-        ImmutableBytesWritable key, Map<PColumn, byte[]> columnValues) {
-
-        if (saltColumns == null || saltColumns.size() == 0) {
-            return key;
-        }
-
-        byte[][] values = new byte[saltColumns.size()][];
-        int i = 0;
-
-        for (PColumn col : saltColumns) {
-            values[i++] = columnValues.get(col);
-        }
-
-        ImmutableBytesWritable saltKey = new ImmutableBytesWritable();
-        newKey(saltKey, saltColumns, values);
-        return saltKey;
-    }
-
     @Override
     public PRow newRow(KeyValueBuilder builder, long ts, ImmutableBytesWritable key,
-            boolean hasOnDupKey, Map<PColumn, byte[]> columnValues, byte[]... values) {
-        return newRow(builder, ts, key, 0, hasOnDupKey, columnValues, values);
+        boolean hasOnDupKey, byte[]... values) {
+        return newRow(builder, ts, key, key, 0, hasOnDupKey, values);
     }
 
     @Override
     public PRow newRow(KeyValueBuilder builder, ImmutableBytesWritable key,
-        boolean hasOnDupKey, Map<PColumn, byte[]> columnValues, byte[]... values) {
-        return newRow(builder, HConstants.LATEST_TIMESTAMP, key, hasOnDupKey, columnValues, values);
+        boolean hasOnDupKey, byte[]... values) {
+        return newRow(builder, HConstants.LATEST_TIMESTAMP, key, key, hasOnDupKey, values);
+    }
+
+    @Override
+    public PRow newRow(KeyValueBuilder builder, long ts, ImmutableBytesWritable key,
+        ImmutableBytesWritable saltKey, boolean hasOnDupKey, byte[]... values) {
+        return newRow(builder, ts, key, saltKey, 0, hasOnDupKey, values);
+    }
+
+    @Override
+    public PRow newRow(KeyValueBuilder builder, ImmutableBytesWritable key,
+        ImmutableBytesWritable saltKey, boolean hasOnDupKey, byte[]... values) {
+        return newRow(builder, HConstants.LATEST_TIMESTAMP, key, saltKey, hasOnDupKey, values);
     }
 
     @Override

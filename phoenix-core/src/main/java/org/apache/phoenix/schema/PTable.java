@@ -668,7 +668,6 @@ public interface PTable extends PMetaDataEntity {
      * @param ts the timestamp that the key value will have when committed
      * @param key the row key of the key value
      * @param hasOnDupKey true if row has an ON DUPLICATE KEY clause and false otherwise.
-     * @param columnValues required if table was created with SALT_COLUMNS, else can be null
      * @param values the optional key values
      * @return the new row. Use {@link org.apache.phoenix.schema.PRow#toRowMutations()} to
      * generate the Row to send to the HBase server.
@@ -676,7 +675,7 @@ public interface PTable extends PMetaDataEntity {
      * constraint
      */
     PRow newRow(KeyValueBuilder builder, long ts, ImmutableBytesWritable key,
-        boolean hasOnDupKey, Map<PColumn, byte[]> columnValues, byte[]... values);
+        boolean hasOnDupKey, byte[]... values);
 
     /**
      * Creates a new row for the PK values (from {@link #newKey(ImmutableBytesWritable, byte[][])}
@@ -684,7 +683,6 @@ public interface PTable extends PMetaDataEntity {
      * will be set by the HBase server.
      * @param key the row key of the key value
      * @param hasOnDupKey true if row has an ON DUPLICATE KEY clause and false otherwise.
-     * @param columnValues required if table was created with SALT_COLUMNS, else can be null
      * @param values the optional key values
      * @return the new row. Use {@link org.apache.phoenix.schema.PRow#toRowMutations()} to
      * generate the row to send to the HBase server.
@@ -692,7 +690,40 @@ public interface PTable extends PMetaDataEntity {
      * constraint
      */
     PRow newRow(KeyValueBuilder builder, ImmutableBytesWritable key,
-        boolean hasOnDupKey, Map<PColumn, byte[]> columnValues, byte[]... values);
+        boolean hasOnDupKey, byte[]... values);
+
+    /**
+     * Creates a new row at the specified timestamp using the key
+     * for the PK values (from {@link #newKey(ImmutableBytesWritable, byte[][])}
+     * and the optional key values specified using values.
+     * @param ts the timestamp that the key value will have when committed
+     * @param key the row key of the key value
+     * @param saltKey required if table was created with SALT_COLUMNS, else can be null
+     * @param hasOnDupKey true if row has an ON DUPLICATE KEY clause and false otherwise.
+     * @param values the optional key values
+     * @return the new row. Use {@link org.apache.phoenix.schema.PRow#toRowMutations()} to
+     * generate the Row to send to the HBase server.
+     * @throws ConstraintViolationException if row data violates schema
+     * constraint
+     */
+    PRow newRow(KeyValueBuilder builder, long ts, ImmutableBytesWritable key,
+        ImmutableBytesWritable saltKey, boolean hasOnDupKey, byte[]... values);
+
+    /**
+     * Creates a new row for the PK values (from {@link #newKey(ImmutableBytesWritable, byte[][])}
+     * and the optional key values specified using values. The timestamp of the key value
+     * will be set by the HBase server.
+     * @param key the row key of the key value
+     * @param saltKey required if table was created with SALT_COLUMNS, else can be null
+     * @param hasOnDupKey true if row has an ON DUPLICATE KEY clause and false otherwise.
+     * @param values the optional key values
+     * @return the new row. Use {@link org.apache.phoenix.schema.PRow#toRowMutations()} to
+     * generate the row to send to the HBase server.
+     * @throws ConstraintViolationException if row data violates schema
+     * constraint
+     */
+    PRow newRow(KeyValueBuilder builder, ImmutableBytesWritable key,
+        ImmutableBytesWritable saltKey, boolean hasOnDupKey, byte[]... values);
 
     /**
      * Formulates a row key using the values provided. The values must be in
@@ -703,6 +734,16 @@ public interface PTable extends PMetaDataEntity {
      * the row key
      */
     int newKey(ImmutableBytesWritable key, byte[][] values);
+
+    /**
+     * Formulates a salt key using the values provided. The values must be in
+     * the same order as {@link #getPKColumns()}.
+     * @param saltKey bytes pointer that will be filled in with the row key
+     * @param pkValues the full PK column values, not the SALT_COLUMNS subset
+     * @return the number of values that were used from pkValues to set
+     * the row saltKey
+     */
+    int newSaltKey(ImmutableBytesWritable saltKey, byte[][] pkValues);
 
     RowKeySchema getRowKeySchema();
 

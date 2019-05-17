@@ -605,6 +605,7 @@ public class MutationState implements SQLCloseable {
             boolean hasOnDupKey = onDupKeyBytes != null;
             ImmutableBytesPtr key = rowEntry.getKey();
             RowMutationState state = rowEntry.getValue();
+            ImmutableBytesPtr saltKey = state.getSaltKey();
             if (tableWithRowTimestampCol) {
                 RowTimestampColInfo rowTsColInfo = state.getRowTimestampColInfo();
                 if (rowTsColInfo.useServerTimestamp()) {
@@ -621,11 +622,11 @@ public class MutationState implements SQLCloseable {
                     }
                 }
             }
-            Map<PColumn, byte[]> columnValues = rowEntry.getValue().getColumnValues();
             PRow row = table.newRow(connection.getKeyValueBuilder(),
-                timestampToUse, key, hasOnDupKey, columnValues);
+                timestampToUse, key, saltKey, hasOnDupKey);
             List<Mutation> rowMutations, rowMutationsPertainingToIndex;
-            if (rowEntry.getValue().getColumnValues() == PRow.DELETE_MARKER) { // means delete
+            Map<PColumn, byte[]> columnValues = rowEntry.getValue().getColumnValues();
+            if (columnValues == PRow.DELETE_MARKER) { // means delete
                 row.delete();
                 rowMutations = row.toRowMutations();
                 // The DeleteCompiler already generates the deletes for indexes, so no need to do it again
@@ -1487,9 +1488,17 @@ public class MutationState implements SQLCloseable {
         private final RowTimestampColInfo rowTsColInfo;
         private byte[] onDupKeyBytes;
         private long colValuesSize;
+        private ImmutableBytesPtr saltKey;
 
-        public RowMutationState(@Nonnull Map<PColumn, byte[]> columnValues, long colValuesSize, int statementIndex,
-                @Nonnull RowTimestampColInfo rowTsColInfo, byte[] onDupKeyBytes) {
+        public RowMutationState(@Nonnull Map<PColumn, byte[]> columnValues, long colValuesSize,
+            int statementIndex, @Nonnull RowTimestampColInfo rowTsColInfo, byte[] onDupKeyBytes) {
+            this(columnValues, colValuesSize, statementIndex, rowTsColInfo, onDupKeyBytes, null);
+        }
+
+        public RowMutationState(@Nonnull Map<PColumn, byte[]> columnValues, long colValuesSize,
+            int statementIndex, @Nonnull RowTimestampColInfo rowTsColInfo, byte[] onDupKeyBytes,
+            ImmutableBytesPtr saltKey) {
+
             checkNotNull(columnValues);
             checkNotNull(rowTsColInfo);
             this.columnValues = columnValues;
@@ -1497,6 +1506,7 @@ public class MutationState implements SQLCloseable {
             this.rowTsColInfo = rowTsColInfo;
             this.onDupKeyBytes = onDupKeyBytes;
             this.colValuesSize = colValuesSize;
+            this.saltKey = saltKey;
         }
 
         public long calculateEstimatedSize() {
@@ -1514,6 +1524,10 @@ public class MutationState implements SQLCloseable {
 
         int[] getStatementIndexes() {
             return statementIndexes;
+        }
+
+        public ImmutableBytesPtr getSaltKey() {
+            return saltKey;
         }
 
         void join(RowMutationState newRow) {

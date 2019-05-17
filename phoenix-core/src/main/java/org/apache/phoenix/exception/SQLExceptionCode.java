@@ -252,6 +252,7 @@ public enum SQLExceptionCode {
     NO_SPLITS_ON_SALTED_TABLE(1022, "42Y81", "Should not specify split points on salted table with default row key order."),
     SALT_ONLY_ON_CREATE_TABLE(1024, "42Y82", "Salt bucket number may only be specified when creating a table."),
     SET_UNSUPPORTED_PROP_ON_ALTER_TABLE(1025, "42Y83", "Unsupported property set in ALTER TABLE command."),
+    SALT_COLUMNS_MUST_SUBSET_PK(1027, "42Y79", "Salt columns must subset primary key and not include ROW_TIMESTAMP."),
     CANNOT_ADD_NOT_NULLABLE_COLUMN(1038, "42Y84", "Only nullable columns may be added for a pre-existing table."),
     NO_MUTABLE_INDEXES(1026, "42Y85", "Mutable secondary indexes are only supported for HBase version " + MetaDataUtil.decodeHBaseVersionAsString(MetaDataProtocol.MUTABLE_SI_VERSION_THRESHOLD) + " and above."),
     INVALID_INDEX_STATE_TRANSITION(1028, "42Y87", "Invalid index state transition."),

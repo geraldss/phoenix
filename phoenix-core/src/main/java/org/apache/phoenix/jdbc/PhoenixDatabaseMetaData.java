@@ -161,6 +161,8 @@ public class PhoenixDatabaseMetaData implements DatabaseMetaData {
     public static final byte[] COLUMN_COUNT_BYTES = Bytes.toBytes(COLUMN_COUNT);
     public static final String SALT_BUCKETS = "SALT_BUCKETS";
     public static final byte[] SALT_BUCKETS_BYTES = Bytes.toBytes(SALT_BUCKETS);
+    public static final String SALT_COLUMNS = "SALT_COLUMNS";
+    public static final byte[] SALT_COLUMNS_BYTES = Bytes.toBytes(SALT_COLUMNS);
     public static final String STORE_NULLS = "STORE_NULLS";
     public static final byte[] STORE_NULLS_BYTES = Bytes.toBytes(STORE_NULLS);
 
@@ -1469,6 +1471,7 @@ public class PhoenixDatabaseMetaData implements DatabaseMetaData {
                     IndexStateNameFunction.NAME + "(" + INDEX_STATE + ") AS " + INDEX_STATE + "," +
                      IMMUTABLE_ROWS + "," +
                     SALT_BUCKETS + "," +
+                    // SALT_COLUMNS + "," + FIXME PHOENIX-4757
                     MULTI_TENANT + "," +
                     VIEW_STATEMENT + "," +
                     SQLViewTypeFunction.NAME + "(" + VIEW_TYPE + ") AS " + VIEW_TYPE + "," +
@@ -1510,6 +1513,7 @@ public class PhoenixDatabaseMetaData implements DatabaseMetaData {
                     "CAST(null AS CHAR(1)) " + INDEX_STATE + "," +
                     "CAST(null AS BOOLEAN) " + IMMUTABLE_ROWS + "," +
                     "CAST(null AS INTEGER) " + SALT_BUCKETS + "," +
+                    //"CAST(null AS ARRAY) " + SALT_COLUMNS + "," + // FIXME PHOENIX-4757
                     "CAST(null AS BOOLEAN) " + MULTI_TENANT + "," +
                     "'' " + VIEW_STATEMENT + "," +
                     "'' " + VIEW_TYPE + "," +

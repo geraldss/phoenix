@@ -67,6 +67,13 @@ public enum TableProperty {
         }
     },
 
+    SALT_COLUMNS(PhoenixDatabaseMetaData.SALT_COLUMNS, COLUMN_FAMILY_NOT_ALLOWED_TABLE_PROPERTY, false, SALT_ONLY_ON_CREATE_TABLE, false, false) {
+        @Override
+        public Object getPTableValue(PTable table) {
+            return table.getSaltColumns();
+        }
+    },
+
     DEFAULT_COLUMN_FAMILY(DEFAULT_COLUMN_FAMILY_NAME, COLUMN_FAMILY_NOT_ALLOWED_TABLE_PROPERTY, false, DEFAULT_COLUMN_FAMILY_ONLY_ON_CREATE_TABLE, false, false) {
         @Override
         public Object getPTableValue(PTable table) {

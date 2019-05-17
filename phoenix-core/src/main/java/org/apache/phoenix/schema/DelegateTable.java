@@ -120,19 +120,36 @@ public class DelegateTable implements PTable {
 
     @Override
     public PRow newRow(KeyValueBuilder builder, long ts, ImmutableBytesWritable key,
-        boolean hasOnDupKey, Map<PColumn, byte[]> columnValues, byte[]... values) {
-        return delegate.newRow(builder, ts, key, hasOnDupKey, columnValues, values);
+        boolean hasOnDupKey, byte[]... values) {
+        return delegate.newRow(builder, ts, key, hasOnDupKey, values);
     }
 
     @Override
     public PRow newRow(KeyValueBuilder builder, ImmutableBytesWritable key,
-        boolean hasOnDupKey, Map<PColumn, byte[]> columnValues, byte[]... values) {
-        return delegate.newRow(builder, key, hasOnDupKey, columnValues, values);
+        boolean hasOnDupKey, byte[]... values) {
+        return delegate.newRow(builder, key, hasOnDupKey, values);
+    }
+
+    @Override
+    public PRow newRow(KeyValueBuilder builder, long ts, ImmutableBytesWritable key,
+        ImmutableBytesWritable saltKey, boolean hasOnDupKey, byte[]... values) {
+        return delegate.newRow(builder, ts, key, saltKey, hasOnDupKey, values);
+    }
+
+    @Override
+    public PRow newRow(KeyValueBuilder builder, ImmutableBytesWritable key,
+        ImmutableBytesWritable saltKey, boolean hasOnDupKey, byte[]... values) {
+        return delegate.newRow(builder, key, saltKey, hasOnDupKey, values);
     }
 
     @Override
     public int newKey(ImmutableBytesWritable key, byte[][] values) {
         return delegate.newKey(key, values);
+    }
+
+    @Override
+    public int newSaltKey(ImmutableBytesWritable saltKey, byte[][] pkValues) {
+        return delegate.newKey(saltKey, pkValues);
     }
 
     @Override

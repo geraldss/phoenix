@@ -172,7 +172,16 @@ public class UpsertCompiler {
                     regionPrefix.length));
             }
         } 
-        mutation.put(ptr, new RowMutationState(columnValues, columnValueSize, statement.getConnection().getStatementExecutionCounter(), rowTsColInfo, onDupKeyBytes));
+
+        ImmutableBytesPtr saltKey = null;
+        if (table.getSaltColumns() != null) {
+            saltKey = new ImmutableBytesPtr();
+            table.newSaltKey(saltKey, pkValues);
+        }
+
+        mutation.put(ptr, new RowMutationState(columnValues, columnValueSize,
+            statement.getConnection().getStatementExecutionCounter(),
+            rowTsColInfo, onDupKeyBytes, saltKey));
     }
     
     public static MutationState upsertSelect(StatementContext childContext, TableRef tableRef, RowProjector projector,
