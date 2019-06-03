@@ -23,6 +23,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 
@@ -36,7 +37,10 @@ import org.apache.phoenix.filter.SkipScanFilter;
 import org.apache.phoenix.query.KeyRange;
 import org.apache.phoenix.query.KeyRange.Bound;
 import org.apache.phoenix.query.QueryConstants;
+import org.apache.phoenix.schema.PColumn;
+import org.apache.phoenix.schema.PTable;
 import org.apache.phoenix.schema.RowKeySchema;
+import org.apache.phoenix.schema.RowKeySchema.RowKeySchemaBuilder;
 import org.apache.phoenix.schema.SaltingUtil;
 import org.apache.phoenix.schema.SortOrder;
 import org.apache.phoenix.schema.ValueSchema.Field;
@@ -54,8 +58,12 @@ import com.google.common.collect.Lists;
 public class ScanRanges {
     private static final List<List<KeyRange>> EVERYTHING_RANGES = Collections.<List<KeyRange>>emptyList();
     private static final List<List<KeyRange>> NOTHING_RANGES = Collections.<List<KeyRange>>singletonList(Collections.<KeyRange>singletonList(KeyRange.EMPTY_RANGE));
-    public static final ScanRanges EVERYTHING = new ScanRanges(null,ScanUtil.SINGLE_COLUMN_SLOT_SPAN,EVERYTHING_RANGES, KeyRange.EVERYTHING_RANGE, false, false, null, null);
-    public static final ScanRanges NOTHING = new ScanRanges(null,ScanUtil.SINGLE_COLUMN_SLOT_SPAN,NOTHING_RANGES, KeyRange.EMPTY_RANGE, false, false, null, null);
+    public static final ScanRanges EVERYTHING = new ScanRanges
+        (null, ScanUtil.SINGLE_COLUMN_SLOT_SPAN,EVERYTHING_RANGES, KeyRange.EVERYTHING_RANGE,
+         false, false, null, null, null);
+    public static final ScanRanges NOTHING = new ScanRanges
+        (null,ScanUtil.SINGLE_COLUMN_SLOT_SPAN,NOTHING_RANGES, KeyRange.EMPTY_RANGE,
+         false, false, null, null, null);
     private static final Scan HAS_INTERSECTION = new Scan();
 
     public static ScanRanges createPointLookup(List<KeyRange> keys) {
@@ -73,6 +81,13 @@ public class ScanRanges {
     }
 
     public static ScanRanges create(RowKeySchema schema, List<List<KeyRange>> ranges, int[] slotSpan, Integer nBuckets, boolean useSkipScan, int rowTimestampColIndex) {
+        return create(schema, ranges, slotSpan, nBuckets, useSkipScan, rowTimestampColIndex, null);
+    }
+
+    public static ScanRanges create
+        (RowKeySchema schema, List<List<KeyRange>> ranges, int[] slotSpan,
+        Integer nBuckets, boolean useSkipScan, int rowTimestampColIndex, PTable table) {
+
         int offset = nBuckets == null ? 0 : SaltingUtil.NUM_SALTING_BYTES;
         int nSlots = ranges.size();
         if (nSlots == offset) {
@@ -80,11 +95,13 @@ public class ScanRanges {
         } else if ((nSlots == 1 + offset && ranges.get(offset).size() == 1 && ranges.get(offset).get(0) == KeyRange.EMPTY_RANGE)) {
             return NOTHING;
         }
+        // FIXME PHOENIX-4757
+        byte[] saltByte = null;
         TimeRange rowTimestampRange = getRowTimestampColumnRange(ranges, schema, rowTimestampColIndex);
         boolean isPointLookup = isPointLookup(schema, ranges, slotSpan, useSkipScan);
         if (isPointLookup) {
             // TODO: consider keeping original to use for serialization as it would be smaller?
-            List<byte[]> keys = ScanRanges.getPointKeys(ranges, slotSpan, schema, nBuckets);
+            List<byte[]> keys = ScanRanges.getPointKeys(ranges, slotSpan, schema, nBuckets, table);
             List<KeyRange> keyRanges = Lists.newArrayListWithExpectedSize(keys.size());
             // We have full keys here, so use field from our varbinary schema
             for (byte[] key : keys) {
@@ -107,7 +124,11 @@ public class ScanRanges {
                 // when there's a single key.
                 slotSpan = new int[] {schema.getMaxFields()-1};
             }
+        } else if (table != null && table.getSaltColumns() != null) {
+            // PHOENIX-4757 If possible, use SALT_COLUMNS to compute salt byte
+            saltByte = getSaltByteIfPossible(table, schema, ranges, slotSpan, nBuckets, null);
         }
+
         List<List<KeyRange>> sortedRanges = Lists.newArrayListWithExpectedSize(ranges.size());
         for (int i = 0; i < ranges.size(); i++) {
             List<KeyRange> sorted = Lists.newArrayList(ranges.get(i));
@@ -127,10 +148,12 @@ public class ScanRanges {
             byte[] maxKey = ScanUtil.getMaxKey(schema, sortedRanges, slotSpan);
             // If the maxKey has crossed the salt byte boundary, then we do not
             // have anything to filter at the upper end of the range
+            // FIXME PHOENIX-4757
             if (ScanUtil.crossesPrefixBoundary(maxKey, ScanUtil.getPrefix(minKey, offset), offset)) {
                 maxKey = KeyRange.UNBOUND;
             }
             // We won't filter anything at the low end of the range if we just have the salt byte
+            // FIXME PHOENIX-4757
             if (minKey.length <= offset) {
                 minKey = KeyRange.UNBOUND;
             }
@@ -140,7 +163,8 @@ public class ScanRanges {
         if (scanRange == KeyRange.EMPTY_RANGE) {
             return NOTHING;
         }
-        return new ScanRanges(schema, slotSpan, sortedRanges, scanRange, useSkipScan, isPointLookup, nBuckets, rowTimestampRange);
+        return new ScanRanges(schema, slotSpan, sortedRanges, scanRange, useSkipScan,
+                              isPointLookup, nBuckets, rowTimestampRange, saltByte);
     }
 
     private SkipScanFilter filter;
@@ -152,14 +176,21 @@ public class ScanRanges {
     private final boolean useSkipScanFilter;
     private final KeyRange scanRange;
     private final TimeRange rowTimestampRange;
+    private final byte[] saltByte;
 
-    private ScanRanges (RowKeySchema schema, int[] slotSpan, List<List<KeyRange>> ranges, KeyRange scanRange, boolean useSkipScanFilter, boolean isPointLookup, Integer bucketNum, TimeRange rowTimestampRange) {
+    private ScanRanges
+        (RowKeySchema schema, int[] slotSpan, List<List<KeyRange>> ranges, KeyRange scanRange,
+         boolean useSkipScanFilter, boolean isPointLookup, Integer bucketNum,
+         TimeRange rowTimestampRange, byte[] saltByte) {
+
         this.isPointLookup = isPointLookup;
         this.isSalted = bucketNum != null;
         this.useSkipScanFilter = useSkipScanFilter;
         this.scanRange = scanRange;
         this.rowTimestampRange = rowTimestampRange;
+        this.saltByte = saltByte;
         
+        // FIXME PHOENIX-4757
         if (isSalted && !isPointLookup) {
             ranges.set(0, SaltingUtil.generateAllSaltingRanges(bucketNum));
         }
@@ -228,6 +259,7 @@ public class ScanRanges {
         }
         // Keep the keys as they are if we have a point lookup, as we've already resolved the
         // salt bytes in that case.
+        // FIXME PHOENIX-4757
         final int scanKeyOffset = this.isSalted && !this.isPointLookup ? SaltingUtil.NUM_SALTING_BYTES : 0;
         assert (scanKeyOffset == 0 || keyOffset == 0);
         // Total offset for startKey/stopKey. Either 1 for salted tables or the prefix length
@@ -298,9 +330,11 @@ public class ScanRanges {
             // were passed in (which have the prefix) for the above range check,
             // we need to remove the prefix before running our intersect method.
             if (scanKeyOffset > 0) {
+                // FIXME PHOENIX-4757: use salt byte from SALT_COLUMNS if available
                 if (skipScanStartKey != originalStartKey) { // original already has correct salt byte
                     skipScanStartKey = replaceSaltByte(skipScanStartKey, prefixBytes);
                 }
+                // FIXME PHOENIX-4757: use nextByte(salt byte from SALT_COLUMNS) if available
                 if (skipScanStopKey != originalStopKey) {
                     skipScanStopKey = replaceSaltByte(skipScanStopKey, prefixBytes);
                 }
@@ -360,9 +394,11 @@ public class ScanRanges {
         // were passed in. Our scan either doesn't have the prefix or has a placeholder
         // for it.
         if (totalKeyOffset > 0) {
+            // FIXME PHOENIX-4757: use salt byte from SALT_COLUMNS if available
             if (scanStartKey != originalStartKey) {
                 scanStartKey = prefixKey(scanStartKey, scanKeyOffset, prefixBytes, keyOffset);
             }
+            // FIXME PHOENIX-4757: use nextByte(salt byte from SALT_COLUMNS) if available
             if (scanStopKey != originalStopKey) {
                 scanStopKey = prefixKey(scanStopKey, scanKeyOffset, prefixBytes, keyOffset);
             }
@@ -401,6 +437,7 @@ public class ScanRanges {
             return true;
         }
         
+        // FIXME PHOENIX-4757
         boolean crossesSaltBoundary = isSalted && ScanUtil.crossesPrefixBoundary(regionEndKey,
                 ScanUtil.getPrefix(regionStartKey, SaltingUtil.NUM_SALTING_BYTES), 
                 SaltingUtil.NUM_SALTING_BYTES);        
@@ -503,7 +540,10 @@ public class ScanRanges {
         return idx >= 0;
     }
 
-    private static List<byte[]> getPointKeys(List<List<KeyRange>> ranges, int[] slotSpan, RowKeySchema schema, Integer bucketNum) {
+    private static List<byte[]> getPointKeys
+        (List<List<KeyRange>> ranges, int[] slotSpan,
+         RowKeySchema schema, Integer bucketNum, PTable table) {
+
         if (ranges == null || ranges.isEmpty()) {
             return Collections.emptyList();
         }
@@ -519,9 +559,14 @@ public class ScanRanges {
         int maxKeyLength = SchemaUtil.getMaxKeyLength(schema, ranges);
         int length;
         byte[] key = new byte[maxKeyLength];
+        boolean hasSaltColumns = table != null && table.getSaltColumns() != null;
         do {
             length = ScanUtil.setKey(schema, ranges, slotSpan, position, Bound.LOWER, key, offset, offset, ranges.size(), offset);
-            if (isSalted) {
+            if (hasSaltColumns) {
+                byte[] saltByte = getSaltByteIfPossible
+                    (table, schema, ranges, slotSpan, bucketNum, position);
+                key[0] = saltByte[0];
+            } else if (isSalted) {
                 key[0] = SaltingUtil.getSaltingByte(key, offset, length, bucketNum);
             }
             keys.add(Arrays.copyOf(key, length + offset));
@@ -694,4 +739,68 @@ public class ScanRanges {
         return rowTimestampRange;
     }
 
+    // PHOENIX-4757 If possible, use SALT_COLUMNS to compute salt byte
+    private static byte[] getSaltByteIfPossible
+        (PTable table, RowKeySchema schema, List<List<KeyRange>> ranges,
+         int[] slotSpan, int nBuckets, int[] position) {
+
+        int rangeCount = ranges.size();
+        List<PColumn> saltColumns = table.getSaltColumns();
+        if (saltColumns == null || rangeCount < saltColumns.size()) {
+            return null;
+        }
+
+        if (position == null) {
+            // Bail if any range is not a point or contains OR
+            if (!isPointLookup(schema, ranges, slotSpan, false)) {
+                return null;
+            }
+
+            // Bail if any range spans more than 1 column
+            for (int s : slotSpan) {
+                if (s != 0) {
+                    return null;
+                }
+            }
+
+            position = new int[rangeCount];
+        }
+
+        List<PColumn> pkColumns = table.getPKColumns();
+        HashMap<PColumn, Integer> map = new HashMap<PColumn, Integer>(pkColumns.size());
+        int i = 0;
+        for (PColumn col : pkColumns) {
+            map.put(col, Integer.valueOf(i++));
+        }
+
+        int saltCount = saltColumns.size();
+        RowKeySchemaBuilder sb = new RowKeySchemaBuilder(saltCount);
+        List<List<KeyRange>> saltRanges = new ArrayList<List<KeyRange>>(saltCount);
+        int[] saltSpan = new int[saltCount];
+        int[] saltPosition = new int[saltCount];
+
+        i = 0;
+        for (PColumn col : saltColumns) {
+            int pos = map.get(col);
+            if (rangeCount <= pos) {
+                return null;
+            }
+
+            Field f = schema.getField(pos);
+            sb = sb.addField(f, f.isNullable(), f.getSortOrder());
+            saltRanges.add(ranges.get(pos));
+            saltSpan[i] = slotSpan[pos];
+            saltPosition[i] = position[pos];
+            i++;
+        }
+
+        RowKeySchema saltSchema = sb.build();
+        int offset = 1;
+        int maxKeyLength = SchemaUtil.getMaxKeyLength(saltSchema, saltRanges);
+        byte[] key = new byte[maxKeyLength];
+        int length = ScanUtil.setKey(saltSchema, saltRanges, saltSpan, saltPosition, Bound.LOWER,
+                                     key, offset, offset, saltRanges.size(), offset);
+        byte salt = SaltingUtil.getSaltingByte(key, offset, length, nBuckets);
+        return new byte[]{salt};
+    }
 }

@@ -2670,13 +2670,21 @@ public class MetaDataClient {
                     String strName = ((String) objName).toUpperCase();
                     PColumn col = pkMap.get(strName);
                     if (col == null || col.isRowTimestamp()) {
-                        throw new SQLExceptionInfo.Builder(SQLExceptionCode.SALT_COLUMNS_MUST_SUBSET_PK)
+                        throw new SQLExceptionInfo.Builder
+                            (SQLExceptionCode.SALT_COLUMNS_MUST_SUBSET_PK)
                             .setSchemaName(schemaName)
                             .setTableName(tableName)
                             .setColumnName(strName)
                             .build().buildException();
                     }
                     saltColumns.add(col);
+                }
+
+                if (saltColumns.size() == pkColumns.size()) {
+                    throw new SQLExceptionInfo.Builder(SQLExceptionCode.SALT_COLUMNS_MUST_SUBSET_PK)
+                        .setSchemaName(schemaName)
+                        .setTableName(tableName)
+                        .build().buildException();
                 }
             }
 

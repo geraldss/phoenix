@@ -143,8 +143,9 @@ public class SaltColumnsIT extends ParallelStatsDisabledIT {
         String create = "CREATE TABLE " + table + " ("
             + " keyA BIGINT NOT NULL,"
             + " keyB BIGINT NOT NULL,"
+            + " keyC BIGINT NOT NULL,"
             + " val SMALLINT,"
-            + " CONSTRAINT pk PRIMARY KEY (keyA, keyB)"
+            + " CONSTRAINT pk PRIMARY KEY (keyA, keyB, keyC)"
             + ")";
 
         conn.createStatement().execute(create);
@@ -157,8 +158,9 @@ public class SaltColumnsIT extends ParallelStatsDisabledIT {
         String create = "CREATE TABLE " + table + " ("
             + " keyA BIGINT NOT NULL,"
             + " keyB BIGINT NOT NULL,"
+            + " keyC BIGINT NOT NULL,"
             + " val SMALLINT,"
-            + " CONSTRAINT pk PRIMARY KEY (keyA, keyB)"
+            + " CONSTRAINT pk PRIMARY KEY (keyA, keyB, keyC)"
             + ") "
             + " SALT_BUCKETS = 4";
 
@@ -202,28 +204,32 @@ public class SaltColumnsIT extends ParallelStatsDisabledIT {
                                int c2, boolean swap, boolean sort)
         throws Exception {
 
-        String upsert = "UPSERT INTO " + table + "(keyA, keyB, val) VALUES(?, ?, ?)";
+        String upsert = "UPSERT INTO " + table + "(keyA, keyB, keyC, val) VALUES(?, ?, ?, ?)";
         PreparedStatement upsertStmt = conn.prepareStatement(upsert);
         for (int i = 0; i < c1; i++) {
             upsertStmt.setInt(1, 10);
             upsertStmt.setInt(2, 100+i);
             upsertStmt.setInt(3, 1);
+            upsertStmt.setInt(4, 1);
             upsertStmt.execute();
 
             upsertStmt.setInt(1, 20);
             upsertStmt.setInt(2, 100+i);
-            upsertStmt.setInt(3, 2);
+            upsertStmt.setInt(3, 1);
+            upsertStmt.setInt(4, 2);
             upsertStmt.execute();
         }
         for (int i = 0; i < c2; i++) {
             upsertStmt.setInt(1, 10);
             upsertStmt.setInt(2, 200+i);
-            upsertStmt.setInt(3, 2);
+            upsertStmt.setInt(3, 1);
+            upsertStmt.setInt(4, 2);
             upsertStmt.execute();
 
             upsertStmt.setInt(1, 20);
             upsertStmt.setInt(2, 200+i);
             upsertStmt.setInt(3, 1);
+            upsertStmt.setInt(4, 1);
             upsertStmt.execute();
         }
         conn.commit();
