@@ -95,8 +95,8 @@ public class ScanRanges {
         } else if ((nSlots == 1 + offset && ranges.get(offset).size() == 1 && ranges.get(offset).get(0) == KeyRange.EMPTY_RANGE)) {
             return NOTHING;
         }
-        // FIXME PHOENIX-4757
-        byte[] saltByte = null;
+
+        byte[] saltByte = null; // PHOENIX-4757 for SALT_COLUMNS
         TimeRange rowTimestampRange = getRowTimestampColumnRange(ranges, schema, rowTimestampColIndex);
         boolean isPointLookup = isPointLookup(schema, ranges, slotSpan, useSkipScan);
         if (isPointLookup) {
@@ -127,6 +127,10 @@ public class ScanRanges {
         } else if (table != null && table.getSaltColumns() != null) {
             // PHOENIX-4757 If possible, use SALT_COLUMNS to compute salt byte
             saltByte = getSaltByteIfPossible(table, schema, ranges, slotSpan, nBuckets, null);
+            if (saltByte != null) {
+                ranges = new ArrayList<>(ranges);
+                ranges.set(0, SaltingUtil.generateOneSaltingRange(saltByte));
+            }
         }
 
         List<List<KeyRange>> sortedRanges = Lists.newArrayListWithExpectedSize(ranges.size());
@@ -148,12 +152,10 @@ public class ScanRanges {
             byte[] maxKey = ScanUtil.getMaxKey(schema, sortedRanges, slotSpan);
             // If the maxKey has crossed the salt byte boundary, then we do not
             // have anything to filter at the upper end of the range
-            // FIXME PHOENIX-4757
             if (ScanUtil.crossesPrefixBoundary(maxKey, ScanUtil.getPrefix(minKey, offset), offset)) {
                 maxKey = KeyRange.UNBOUND;
             }
             // We won't filter anything at the low end of the range if we just have the salt byte
-            // FIXME PHOENIX-4757
             if (minKey.length <= offset) {
                 minKey = KeyRange.UNBOUND;
             }
@@ -190,8 +192,11 @@ public class ScanRanges {
         this.rowTimestampRange = rowTimestampRange;
         this.saltByte = saltByte;
         
-        // FIXME PHOENIX-4757
-        if (isSalted && !isPointLookup) {
+        // PHOENIX-4757 Set single saltByte if known from SALT_COLUMNS
+        // Repeated from caller to handle other code paths
+        if (saltByte != null) {
+            ranges.set(0, SaltingUtil.generateOneSaltingRange(saltByte));
+        } else if (isSalted && !isPointLookup) {
             ranges.set(0, SaltingUtil.generateAllSaltingRanges(bucketNum));
         }
         this.ranges = ImmutableList.copyOf(ranges);
@@ -259,16 +264,28 @@ public class ScanRanges {
         }
         // Keep the keys as they are if we have a point lookup, as we've already resolved the
         // salt bytes in that case.
-        // FIXME PHOENIX-4757
         final int scanKeyOffset = this.isSalted && !this.isPointLookup ? SaltingUtil.NUM_SALTING_BYTES : 0;
         assert (scanKeyOffset == 0 || keyOffset == 0);
         // Total offset for startKey/stopKey. Either 1 for salted tables or the prefix length
         // of the current region for local indexes. We'll never have a case where a table is
         // both salted and local.
         final int totalKeyOffset = scanKeyOffset + keyOffset;
-        byte[] prefixBytes = ByteUtil.EMPTY_BYTE_ARRAY;
+        byte[] startPrefixBytes = ByteUtil.EMPTY_BYTE_ARRAY;
+        byte[] stopPrefixBytes = ByteUtil.EMPTY_BYTE_ARRAY;
         if (totalKeyOffset > 0) {
-            prefixBytes = ScanUtil.getPrefix(startKey, totalKeyOffset);
+            startPrefixBytes = ScanUtil.getPrefix(startKey, totalKeyOffset);
+            stopPrefixBytes = ScanUtil.getPrefix(startKey, totalKeyOffset);
+            // PHOENIX-4757 Use SALT_COLUMNS to restrict scan
+            if (scanKeyOffset > 0 && this.saltByte != null) {
+                if (startPrefixBytes == ByteUtil.EMPTY_BYTE_ARRAY ||
+                    Bytes.compareTo(startPrefixBytes, this.saltByte) < 0) {
+                    startPrefixBytes = this.saltByte;
+                }
+                if (stopPrefixBytes == ByteUtil.EMPTY_BYTE_ARRAY ||
+                    Bytes.compareTo(this.saltByte, stopPrefixBytes) < 0) {
+                    stopPrefixBytes = this.saltByte;
+                }
+            }
             /*
              * If our startKey to stopKey crosses a region boundary consider everything after the startKey as our scan
              * is always done within a single region. This prevents us from having to prefix the key prior to knowing
@@ -330,13 +347,11 @@ public class ScanRanges {
             // were passed in (which have the prefix) for the above range check,
             // we need to remove the prefix before running our intersect method.
             if (scanKeyOffset > 0) {
-                // FIXME PHOENIX-4757: use salt byte from SALT_COLUMNS if available
                 if (skipScanStartKey != originalStartKey) { // original already has correct salt byte
-                    skipScanStartKey = replaceSaltByte(skipScanStartKey, prefixBytes);
+                    skipScanStartKey = replaceSaltByte(skipScanStartKey, startPrefixBytes);
                 }
-                // FIXME PHOENIX-4757: use nextByte(salt byte from SALT_COLUMNS) if available
                 if (skipScanStopKey != originalStopKey) {
-                    skipScanStopKey = replaceSaltByte(skipScanStopKey, prefixBytes);
+                    skipScanStopKey = replaceSaltByte(skipScanStopKey, stopPrefixBytes);
                 }
             } else if (keyOffset > 0) {
                 if (skipScanStartKey == originalStartKey) {
@@ -394,13 +409,11 @@ public class ScanRanges {
         // were passed in. Our scan either doesn't have the prefix or has a placeholder
         // for it.
         if (totalKeyOffset > 0) {
-            // FIXME PHOENIX-4757: use salt byte from SALT_COLUMNS if available
             if (scanStartKey != originalStartKey) {
-                scanStartKey = prefixKey(scanStartKey, scanKeyOffset, prefixBytes, keyOffset);
+                scanStartKey = prefixKey(scanStartKey, scanKeyOffset, startPrefixBytes, keyOffset);
             }
-            // FIXME PHOENIX-4757: use nextByte(salt byte from SALT_COLUMNS) if available
             if (scanStopKey != originalStopKey) {
-                scanStopKey = prefixKey(scanStopKey, scanKeyOffset, prefixBytes, keyOffset);
+                scanStopKey = prefixKey(scanStopKey, scanKeyOffset, stopPrefixBytes, keyOffset);
             }
         }
         // Don't let the stopRow of the scan go beyond the originalStopKey
@@ -437,7 +450,6 @@ public class ScanRanges {
             return true;
         }
         
-        // FIXME PHOENIX-4757
         boolean crossesSaltBoundary = isSalted && ScanUtil.crossesPrefixBoundary(regionEndKey,
                 ScanUtil.getPrefix(regionStartKey, SaltingUtil.NUM_SALTING_BYTES), 
                 SaltingUtil.NUM_SALTING_BYTES);        
@@ -750,19 +762,8 @@ public class ScanRanges {
             return null;
         }
 
-        if (position == null) {
-            // Bail if any range is not a point or contains OR
-            if (!isPointLookup(schema, ranges, slotSpan, false)) {
-                return null;
-            }
-
-            // Bail if any range spans more than 1 column
-            for (int s : slotSpan) {
-                if (s != 0) {
-                    return null;
-                }
-            }
-
+        boolean noPositions = position == null;
+        if (noPositions) {
             position = new int[rangeCount];
         }
 
@@ -795,6 +796,21 @@ public class ScanRanges {
         }
 
         RowKeySchema saltSchema = sb.build();
+
+        if (noPositions) {
+            // Bail if any range is not a point or contains OR
+            if (!isPointLookup(saltSchema, saltRanges, saltSpan, false)) {
+                return null;
+            }
+
+            // Bail if any range spans more than 1 column
+            for (int s : saltSpan) {
+                if (s != 0) {
+                    return null;
+                }
+            }
+        }
+
         int offset = 1;
         int maxKeyLength = SchemaUtil.getMaxKeyLength(saltSchema, saltRanges);
         byte[] key = new byte[maxKeyLength];

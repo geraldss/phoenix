@@ -55,6 +55,12 @@ public class SaltingUtil {
         return allRanges;
     }
 
+    public static List<KeyRange> generateOneSaltingRange(byte[] saltByte) {
+        List<KeyRange> ranges = Lists.newArrayListWithExpectedSize(1);
+        ranges.add(SALTING_COLUMN.getDataType().getKeyRange(saltByte, true, saltByte, true));
+        return ranges;
+    }
+
     public static byte[][] getSalteByteSplitPoints(int saltBucketNum) {
         byte[][] splits = new byte[saltBucketNum-1][];
         for (int i = 1; i < saltBucketNum; i++) {
