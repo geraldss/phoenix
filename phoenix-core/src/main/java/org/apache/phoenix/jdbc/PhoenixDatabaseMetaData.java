@@ -1471,7 +1471,7 @@ public class PhoenixDatabaseMetaData implements DatabaseMetaData {
                     IndexStateNameFunction.NAME + "(" + INDEX_STATE + ") AS " + INDEX_STATE + "," +
                      IMMUTABLE_ROWS + "," +
                     SALT_BUCKETS + "," +
-                    // SALT_COLUMNS + "," + FIXME PHOENIX-4757
+                    SALT_COLUMNS + "," + // PHOENIX-4757
                     MULTI_TENANT + "," +
                     VIEW_STATEMENT + "," +
                     SQLViewTypeFunction.NAME + "(" + VIEW_TYPE + ") AS " + VIEW_TYPE + "," +
@@ -1513,7 +1513,7 @@ public class PhoenixDatabaseMetaData implements DatabaseMetaData {
                     "CAST(null AS CHAR(1)) " + INDEX_STATE + "," +
                     "CAST(null AS BOOLEAN) " + IMMUTABLE_ROWS + "," +
                     "CAST(null AS INTEGER) " + SALT_BUCKETS + "," +
-                    //"CAST(null AS ARRAY) " + SALT_COLUMNS + "," + // FIXME PHOENIX-4757
+                    "CAST(null AS VARCHAR) " + SALT_COLUMNS + "," + // PHOENIX-4757
                     "CAST(null AS BOOLEAN) " + MULTI_TENANT + "," +
                     "'' " + VIEW_STATEMENT + "," +
                     "'' " + VIEW_TYPE + "," +

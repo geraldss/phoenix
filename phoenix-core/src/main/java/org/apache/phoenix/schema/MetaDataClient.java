@@ -289,7 +289,7 @@ public class MetaDataClient {
                     TABLE_SEQ_NUM + "," +
                     COLUMN_COUNT + "," +
                     SALT_BUCKETS + "," +
-                    //SALT_COLUMNS + "," + // FIXME PHOENIX-4757
+                    SALT_COLUMNS + "," + // PHOENIX-4757
                     PK_NAME + "," +
                     DATA_TABLE_NAME + "," +
                     INDEX_STATE + "," +
@@ -312,7 +312,8 @@ public class MetaDataClient {
                     ENCODING_SCHEME + "," +
                     USE_STATS_FOR_PARALLELIZATION +"," +
                     VIEW_INDEX_ID_DATA_TYPE +
-                    ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                    ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, " +
+                    "          ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
     private static final String CREATE_SCHEMA = "UPSERT INTO " + SYSTEM_CATALOG_SCHEMA + ".\"" + SYSTEM_CATALOG_TABLE
             + "\"( " + TABLE_SCHEM + "," + TABLE_NAME + ") VALUES (?,?)";
@@ -2014,7 +2015,7 @@ public class MetaDataClient {
             boolean storeNulls = false;
             TransactionFactory.Provider transactionProvider = (parent!= null) ? parent.getTransactionProvider() : null;
             Integer saltBucketNum = null;
-            List<Object> saltColumnNames = null;
+            List<Object> saltColumnProp = null;
             List<PColumn> saltColumns = null;
             String defaultFamilyName = null;
             boolean isImmutableRows = false;
@@ -2145,7 +2146,7 @@ public class MetaDataClient {
                 addSaltColumn = (saltBucketNum != null);
 
                 if (saltBucketNum != null) {
-                    saltColumnNames = (List<Object>) TableProperty.SALT_COLUMNS.getValue(tableProps);
+                    saltColumnProp = (List<Object>) TableProperty.SALT_COLUMNS.getValue(tableProps);
                 }
             }
 
@@ -2656,28 +2657,39 @@ public class MetaDataClient {
             }
 
             // Use SALT_COLUMNS property if provided. PHOENIX-4757
-            if (saltColumnNames != null) {
+            List<String> saltColumnNames = null;
+            if (saltColumnProp != null) {
                 Map<String, PColumn> pkMap = new HashMap<>(pkColumns.size()*2);
                 for (PColumn col : pkColumns) {
                     String colName = col.getName().getString().toUpperCase();
                     pkMap.put(colName, col);
                 }
 
-                saltColumns = new ArrayList<PColumn>(saltColumnNames.size()+1);
+                saltColumns = new ArrayList<>(saltColumnProp.size()+1);
                 saltColumns.add(SaltingUtil.SALTING_COLUMN);
+                saltColumnNames = new ArrayList<>(saltColumnProp.size());
 
-                for (Object objName : saltColumnNames) {
-                    String strName = ((String) objName).toUpperCase();
-                    PColumn col = pkMap.get(strName);
+                for (Object prop : saltColumnProp) {
+                    if (! (prop instanceof String)) {
+                        throw new SQLExceptionInfo.Builder
+                            (SQLExceptionCode.SALT_COLUMNS_MUST_SUBSET_PK)
+                            .setSchemaName(schemaName)
+                            .setTableName(tableName)
+                            .setColumnName(prop.toString())
+                            .build().buildException();
+                    }
+                    String name = ((String) prop);
+                    PColumn col = pkMap.get(name.toUpperCase());
                     if (col == null || col.isRowTimestamp()) {
                         throw new SQLExceptionInfo.Builder
                             (SQLExceptionCode.SALT_COLUMNS_MUST_SUBSET_PK)
                             .setSchemaName(schemaName)
                             .setTableName(tableName)
-                            .setColumnName(strName)
+                            .setColumnName(name)
                             .build().buildException();
                     }
                     saltColumns.add(col);
+                    saltColumnNames.add(name);
                 }
 
                 if (saltColumns.size() == pkColumns.size()) {
@@ -2850,75 +2862,81 @@ public class MetaDataClient {
             String dataTableName = parent == null || tableType == PTableType.VIEW ? null : parent.getTableName().getString();
             PIndexState indexState = parent == null || tableType == PTableType.VIEW  ? null : PIndexState.BUILDING;
             PreparedStatement tableUpsert = connection.prepareStatement(CREATE_TABLE);
-            tableUpsert.setString(1, tenantIdStr);
-            tableUpsert.setString(2, schemaName);
-            tableUpsert.setString(3, tableName);
-            tableUpsert.setString(4, tableType.getSerializedValue());
-            tableUpsert.setLong(5, PTable.INITIAL_SEQ_NUM);
-            tableUpsert.setInt(6, position);
+            int i = 1;
+            tableUpsert.setString(i++, tenantIdStr);
+            tableUpsert.setString(i++, schemaName);
+            tableUpsert.setString(i++, tableName);
+            tableUpsert.setString(i++, tableType.getSerializedValue());
+            tableUpsert.setLong(i++, PTable.INITIAL_SEQ_NUM);
+            tableUpsert.setInt(i++, position);
             if (saltBucketNum != null) {
-                tableUpsert.setInt(7, saltBucketNum);
+                tableUpsert.setInt(i++, saltBucketNum);
             } else {
-                tableUpsert.setNull(7, Types.INTEGER);
+                tableUpsert.setNull(i++, Types.INTEGER);
             }
-            // FIXME PHOENIX-4757 set SALT_COLUMNS
-            tableUpsert.setString(8, pkName);
-            tableUpsert.setString(9, dataTableName);
-            tableUpsert.setString(10, indexState == null ? null : indexState.getSerializedValue());
-            tableUpsert.setBoolean(11, isImmutableRows);
-            tableUpsert.setString(12, defaultFamilyName);
+            // Set SALT_COLUMNS in system catalog. PHOENIX-4757
+            if (saltColumnNames != null) {
+                tableUpsert.setString(i++, String.join(",", saltColumnNames));
+            } else {
+                tableUpsert.setNull(i++, Types.VARCHAR);
+            }
+            tableUpsert.setString(i++, pkName);
+            tableUpsert.setString(i++, dataTableName);
+            tableUpsert.setString(i++, indexState == null ? null : indexState.getSerializedValue());
+            tableUpsert.setBoolean(i++, isImmutableRows);
+            tableUpsert.setString(i++, defaultFamilyName);
             if (parent != null && parent.getAutoPartitionSeqName() != null && viewStatement==null) {
                 // set to non-null value so that we will generate a Put that
                 // will be set correctly on the server
-                tableUpsert.setString(13, QueryConstants.EMPTY_COLUMN_VALUE);
+                tableUpsert.setString(i++, QueryConstants.EMPTY_COLUMN_VALUE);
             }
             else {
-                tableUpsert.setString(13, viewStatement);
+                tableUpsert.setString(i++, viewStatement);
             }
-            tableUpsert.setBoolean(14, disableWAL);
-            tableUpsert.setBoolean(15, multiTenant);
+            tableUpsert.setBoolean(i++, disableWAL);
+            tableUpsert.setBoolean(i++, multiTenant);
             if (viewType == null) {
-                tableUpsert.setNull(16, Types.TINYINT);
+                tableUpsert.setNull(i++, Types.TINYINT);
             } else {
-                tableUpsert.setByte(16, viewType.getSerializedValue());
+                tableUpsert.setByte(i++, viewType.getSerializedValue());
             }
             if (indexType == null) {
-                tableUpsert.setNull(17, Types.TINYINT);
+                tableUpsert.setNull(i++, Types.TINYINT);
             } else {
-                tableUpsert.setByte(17, indexType.getSerializedValue());
+                tableUpsert.setByte(i++, indexType.getSerializedValue());
             }
-            tableUpsert.setBoolean(18, storeNulls);
+            tableUpsert.setBoolean(i++, storeNulls);
             if (parent != null && tableType == PTableType.VIEW) {
-                tableUpsert.setInt(19, parent.getColumns().size());
+                tableUpsert.setInt(i++, parent.getColumns().size());
             } else {
-                tableUpsert.setInt(19, BASE_TABLE_BASE_COLUMN_COUNT);
+                tableUpsert.setInt(i++, BASE_TABLE_BASE_COLUMN_COUNT);
             }
             if (transactionProvider == null) {
-                tableUpsert.setNull(20, Types.TINYINT);
+                tableUpsert.setNull(i++, Types.TINYINT);
             } else {
-                tableUpsert.setByte(20, transactionProvider.getCode());
+                tableUpsert.setByte(i++, transactionProvider.getCode());
             }
-            tableUpsert.setLong(21, updateCacheFrequency);
-            tableUpsert.setBoolean(22, isNamespaceMapped);
+            tableUpsert.setLong(i++, updateCacheFrequency);
+            tableUpsert.setBoolean(i++, isNamespaceMapped);
             if (autoPartitionSeq == null) {
-                tableUpsert.setNull(23, Types.VARCHAR);
+                tableUpsert.setNull(i++, Types.VARCHAR);
             } else {
-                tableUpsert.setString(23, autoPartitionSeq);
+                tableUpsert.setString(i++, autoPartitionSeq);
             }
-            tableUpsert.setBoolean(24, isAppendOnlySchema);
+            tableUpsert.setBoolean(i++, isAppendOnlySchema);
             if (guidePostsWidth == null) {
-                tableUpsert.setNull(25, Types.BIGINT);                
+                tableUpsert.setNull(i++, Types.BIGINT);
             } else {
-                tableUpsert.setLong(25, guidePostsWidth);
+                tableUpsert.setLong(i++, guidePostsWidth);
             }
-            tableUpsert.setByte(26, immutableStorageScheme.getSerializedMetadataValue());
-            tableUpsert.setByte(27, encodingScheme.getSerializedMetadataValue());
+            tableUpsert.setByte(i++, immutableStorageScheme.getSerializedMetadataValue());
+            tableUpsert.setByte(i++, encodingScheme.getSerializedMetadataValue());
             if (useStatsForParallelizationProp == null) {
-                tableUpsert.setNull(28, Types.BOOLEAN);
+                tableUpsert.setNull(i++, Types.BOOLEAN);
             } else {
-                tableUpsert.setBoolean(28, useStatsForParallelizationProp);
+                tableUpsert.setBoolean(i++, useStatsForParallelizationProp);
             }
-            tableUpsert.setInt(29, Types.BIGINT);
+            tableUpsert.setInt(i++, Types.BIGINT);
             tableUpsert.execute();
 
             if (asyncCreatedDate != null) {

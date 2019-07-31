@@ -184,6 +184,7 @@ public interface QueryConstants {
             PK_NAME + " VARCHAR," +
             COLUMN_COUNT + " INTEGER," +
             SALT_BUCKETS + " INTEGER," +
+            SALT_COLUMNS + " VARCHAR," + // PHOENIX-4757
             DATA_TABLE_NAME + " VARCHAR," +
             INDEX_STATE + " CHAR(1),\n" +
             IMMUTABLE_ROWS + " BOOLEAN,\n" +
