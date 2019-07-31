@@ -104,6 +104,7 @@ message PTable {
   optional bool useStatsForParallelization = 37;
   optional int32 transactionProvider = 38;
   optional int32 viewIndexIdType = 39 [default = 5];
+  optional string saltColumns = 40;
 }
 
 message EncodedCQCounter {
