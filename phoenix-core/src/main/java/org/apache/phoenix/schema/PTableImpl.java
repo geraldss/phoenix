@@ -126,6 +126,7 @@ public class PTableImpl implements PTable {
     private final long indexDisableTimestamp;
     // Have MultiMap for String->PColumn (may need family qualifier)
     private final List<PColumn> pkColumns;
+    private final String saltColumnNames;
     private final List<PColumn> saltColumns;
     private final List<PColumn> allColumns;
     // columns that were inherited from a parent table but that were dropped in the view
@@ -183,6 +184,7 @@ public class PTableImpl implements PTable {
         private long timeStamp;
         private long indexDisableTimestamp;
         private List<PColumn> pkColumns;
+        private String saltColumnNames;
         private List<PColumn> saltColumns;
         private List<PColumn> allColumns;
         private List<PColumn> excludedColumns;
@@ -282,6 +284,11 @@ public class PTableImpl implements PTable {
 
         public Builder setPkColumns(List<PColumn> pkColumns) {
             this.pkColumns = pkColumns;
+            return this;
+        }
+
+        public Builder setSaltColumnNames(String saltColumnNames) {
+            this.saltColumnNames = saltColumnNames;
             return this;
         }
 
@@ -692,6 +699,21 @@ public class PTableImpl implements PTable {
             for (PName physicalName : this.physicalNames) {
                 estimatedSize += physicalName.getEstimatedSize();
             }
+            // PHOENIX-4757 SALT_COLUMNS
+            if (this.saltColumns != null) {
+                setSaltColumns(ImmutableList.copyOf(this.saltColumns));
+            } else if (this.saltColumnNames != null) {
+                Map<String, PColumn> map = new HashMap<>(pkColumns.size());
+                for (PColumn col : pkColumns) {
+                    map.put(col.getName().getString().toUpperCase(), col);
+                }
+                String[] names = saltColumnNames.split(",");
+                List<PColumn> saltCols = new ArrayList<>(names.length);
+                for (String name : names) {
+                    saltCols.add(map.get(name.toUpperCase()));
+                }
+                setSaltColumns(ImmutableList.copyOf(saltCols));
+            }
             // Populate the derived fields and return the builder
             return this.setName(fullName)
                     .setKey(new PTableKey(this.tenantId, fullName.getString()))
@@ -747,6 +769,7 @@ public class PTableImpl implements PTable {
         this.timeStamp = builder.timeStamp;
         this.indexDisableTimestamp = builder.indexDisableTimestamp;
         this.pkColumns = builder.pkColumns;
+        this.saltColumnNames = builder.saltColumnNames;
         this.saltColumns = builder.saltColumns;
         this.allColumns = builder.allColumns;
         this.excludedColumns = builder.excludedColumns;
@@ -848,6 +871,7 @@ public class PTableImpl implements PTable {
                 .setDefaultFamilyName(table.getDefaultFamilyName())
                 .setRowKeyOrderOptimizable(table.rowKeyOrderOptimizable())
                 .setBucketNum(table.getBucketNum())
+                .setSaltColumnNames(table.getSaltColumnNames())
                 .setSaltColumns(table.getSaltColumns())
                 .setIndexes(table.getIndexes() == null ?
                         Collections.emptyList() : table.getIndexes())
@@ -903,6 +927,11 @@ public class PTableImpl implements PTable {
     @Override
     public List<PColumn> getPKColumns() {
         return pkColumns;
+    }
+
+    @Override
+    public String getSaltColumnNames() {
+        return saltColumnNames;
     }
 
     @Override
@@ -1636,6 +1665,11 @@ public class PTableImpl implements PTable {
             pkName = PNameFactory.newName(table.getPkNameBytes().toByteArray());
         }
         int bucketNum = table.getBucketNum();
+        // PHOENIX-4757
+        String saltColumnNames = null;
+        if (table.hasSaltColumnNames()) {
+            saltColumnNames = table.getSaltColumnNames();
+        }
         List<PColumn> columns = Lists.newArrayListWithExpectedSize(table.getColumnsCount());
         for (PTableProtos.PColumn curPColumnProto : table.getColumnsList()) {
             columns.add(PColumnImpl.createFromProto(curPColumnProto));
@@ -1770,6 +1804,7 @@ public class PTableImpl implements PTable {
                     .setDefaultFamilyName(defaultFamilyName)
                     .setRowKeyOrderOptimizable(rowKeyOrderOptimizable)
                     .setBucketNum((bucketNum == NO_SALTING) ? null : bucketNum)
+                    .setSaltColumnNames(saltColumnNames) // PHOENIX-4757
                     .setIndexes(indexes == null ? Collections.emptyList() : indexes)
                     .setParentSchemaName(parentSchemaName)
                     .setParentTableName(parentTableName)
@@ -1815,6 +1850,11 @@ public class PTableImpl implements PTable {
       } else {
         offset = 1;
         builder.setBucketNum(bucketNum);
+      }
+      // PHOENIX-4757 SALT_COLUMNS
+      String saltColumnNames = table.getSaltColumnNames();
+      if (saltColumnNames != null) {
+          builder.setSaltColumnNames(saltColumnNames);
       }
       List<PColumn> columns = table.getColumns();
       int columnSize = columns.size();

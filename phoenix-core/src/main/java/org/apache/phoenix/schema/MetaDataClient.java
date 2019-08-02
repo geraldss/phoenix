@@ -72,7 +72,7 @@ import static org.apache.phoenix.jdbc.PhoenixDatabaseMetaData.PHYSICAL_NAME;
 import static org.apache.phoenix.jdbc.PhoenixDatabaseMetaData.PK_NAME;
 import static org.apache.phoenix.jdbc.PhoenixDatabaseMetaData.RETURN_TYPE;
 import static org.apache.phoenix.jdbc.PhoenixDatabaseMetaData.SALT_BUCKETS;
-import static org.apache.phoenix.jdbc.PhoenixDatabaseMetaData.SALT_COLUMNS;
+import static org.apache.phoenix.jdbc.PhoenixDatabaseMetaData.SALT_COLUMN_NAMES;
 import static org.apache.phoenix.jdbc.PhoenixDatabaseMetaData.SORT_ORDER;
 import static org.apache.phoenix.jdbc.PhoenixDatabaseMetaData.STORE_NULLS;
 import static org.apache.phoenix.jdbc.PhoenixDatabaseMetaData.SYNC_INDEX_CREATED_DATE;
@@ -289,7 +289,7 @@ public class MetaDataClient {
                     TABLE_SEQ_NUM + "," +
                     COLUMN_COUNT + "," +
                     SALT_BUCKETS + "," +
-                    SALT_COLUMNS + "," + // PHOENIX-4757
+                    SALT_COLUMN_NAMES + "," + // PHOENIX-4757
                     PK_NAME + "," +
                     DATA_TABLE_NAME + "," +
                     INDEX_STATE + "," +
@@ -2657,7 +2657,8 @@ public class MetaDataClient {
             }
 
             // Use SALT_COLUMNS property if provided. PHOENIX-4757
-            List<String> saltColumnNames = null;
+            List<String> saltColumnNameList = null;
+            String saltColumnNames = null;
             if (saltColumnProp != null) {
                 Map<String, PColumn> pkMap = new HashMap<>(pkColumns.size()*2);
                 for (PColumn col : pkColumns) {
@@ -2667,7 +2668,7 @@ public class MetaDataClient {
 
                 saltColumns = new ArrayList<>(saltColumnProp.size()+1);
                 saltColumns.add(SaltingUtil.SALTING_COLUMN);
-                saltColumnNames = new ArrayList<>(saltColumnProp.size());
+                saltColumnNameList = new ArrayList<>(saltColumnProp.size());
 
                 for (Object prop : saltColumnProp) {
                     if (! (prop instanceof String)) {
@@ -2689,7 +2690,7 @@ public class MetaDataClient {
                             .build().buildException();
                     }
                     saltColumns.add(col);
-                    saltColumnNames.add(name);
+                    saltColumnNameList.add(name);
                 }
 
                 if (saltColumns.size() == pkColumns.size()) {
@@ -2698,6 +2699,8 @@ public class MetaDataClient {
                         .setTableName(tableName)
                         .build().buildException();
                 }
+
+                saltColumnNames = String.join(",", saltColumnNameList);
             }
 
             if (!statement.getProps().isEmpty()) {
@@ -2876,7 +2879,7 @@ public class MetaDataClient {
             }
             // Set SALT_COLUMNS in system catalog. PHOENIX-4757
             if (saltColumnNames != null) {
-                tableUpsert.setString(i++, String.join(",", saltColumnNames));
+                tableUpsert.setString(i++, saltColumnNames);
             } else {
                 tableUpsert.setNull(i++, Types.VARCHAR);
             }
@@ -3081,6 +3084,7 @@ public class MetaDataClient {
                                 null : PNameFactory.newName(defaultFamilyName))
                         .setRowKeyOrderOptimizable(rowKeyOrderOptimizable)
                         .setBucketNum(saltBucketNum)
+                        .setSaltColumnNames(saltColumnNames)
                         .setSaltColumns(saltColumns)
                         .setIndexes(Collections.emptyList())
                         .setParentSchemaName((parent == null) ? null : parent.getSchemaName())

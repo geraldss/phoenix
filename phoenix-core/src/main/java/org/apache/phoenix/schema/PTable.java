@@ -599,6 +599,13 @@ public interface PTable extends PMetaDataEntity {
 
     /**
      * If this table was created with explicit SALT_COLUMNS, get the
+     * salt column names, else null. PHOENIX_4757.
+     * @return a list of the salting column names
+     */
+    String getSaltColumnNames();
+
+    /**
+     * If this table was created with explicit SALT_COLUMNS, get the
      * salt columns, else null. PHOENIX_4757.
      * @return a list of the salting columns
      */

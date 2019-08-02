@@ -3705,20 +3705,20 @@ public final class PTableProtos {
      */
     int getViewIndexIdType();
 
-    // optional string saltColumns = 40;
+    // optional string saltColumnNames = 40;
     /**
-     * <code>optional string saltColumns = 40;</code>
+     * <code>optional string saltColumnNames = 40;</code>
      */
-    boolean hasSaltColumns();
+    boolean hasSaltColumnNames();
     /**
-     * <code>optional string saltColumns = 40;</code>
+     * <code>optional string saltColumnNames = 40;</code>
      */
-    java.lang.String getSaltColumns();
+    java.lang.String getSaltColumnNames();
     /**
-     * <code>optional string saltColumns = 40;</code>
+     * <code>optional string saltColumnNames = 40;</code>
      */
     com.google.protobuf.ByteString
-        getSaltColumnsBytes();
+        getSaltColumnNamesBytes();
   }
   /**
    * Protobuf type {@code PTable}
@@ -3982,7 +3982,7 @@ public final class PTableProtos {
             }
             case 322: {
               bitField1_ |= 0x00000004;
-              saltColumns_ = input.readBytes();
+              saltColumnNames_ = input.readBytes();
               break;
             }
           }
@@ -4781,20 +4781,20 @@ public final class PTableProtos {
       return viewIndexIdType_;
     }
 
-    // optional string saltColumns = 40;
-    public static final int SALTCOLUMNS_FIELD_NUMBER = 40;
-    private java.lang.Object saltColumns_;
+    // optional string saltColumnNames = 40;
+    public static final int SALTCOLUMNNAMES_FIELD_NUMBER = 40;
+    private java.lang.Object saltColumnNames_;
     /**
-     * <code>optional string saltColumns = 40;</code>
+     * <code>optional string saltColumnNames = 40;</code>
      */
-    public boolean hasSaltColumns() {
+    public boolean hasSaltColumnNames() {
       return ((bitField1_ & 0x00000004) == 0x00000004);
     }
     /**
-     * <code>optional string saltColumns = 40;</code>
+     * <code>optional string saltColumnNames = 40;</code>
      */
-    public java.lang.String getSaltColumns() {
-      java.lang.Object ref = saltColumns_;
+    public java.lang.String getSaltColumnNames() {
+      java.lang.Object ref = saltColumnNames_;
       if (ref instanceof java.lang.String) {
         return (java.lang.String) ref;
       } else {
@@ -4802,22 +4802,22 @@ public final class PTableProtos {
             (com.google.protobuf.ByteString) ref;
         java.lang.String s = bs.toStringUtf8();
         if (bs.isValidUtf8()) {
-          saltColumns_ = s;
+          saltColumnNames_ = s;
         }
         return s;
       }
     }
     /**
-     * <code>optional string saltColumns = 40;</code>
+     * <code>optional string saltColumnNames = 40;</code>
      */
     public com.google.protobuf.ByteString
-        getSaltColumnsBytes() {
-      java.lang.Object ref = saltColumns_;
+        getSaltColumnNamesBytes() {
+      java.lang.Object ref = saltColumnNames_;
       if (ref instanceof java.lang.String) {
         com.google.protobuf.ByteString b = 
             com.google.protobuf.ByteString.copyFromUtf8(
                 (java.lang.String) ref);
-        saltColumns_ = b;
+        saltColumnNames_ = b;
         return b;
       } else {
         return (com.google.protobuf.ByteString) ref;
@@ -4863,7 +4863,7 @@ public final class PTableProtos {
       useStatsForParallelization_ = false;
       transactionProvider_ = 0;
       viewIndexIdType_ = 5;
-      saltColumns_ = "";
+      saltColumnNames_ = "";
     }
     private byte memoizedIsInitialized = -1;
     public final boolean isInitialized() {
@@ -5046,7 +5046,7 @@ public final class PTableProtos {
         output.writeInt32(39, viewIndexIdType_);
       }
       if (((bitField1_ & 0x00000004) == 0x00000004)) {
-        output.writeBytes(40, getSaltColumnsBytes());
+        output.writeBytes(40, getSaltColumnNamesBytes());
       }
       getUnknownFields().writeTo(output);
     }
@@ -5216,7 +5216,7 @@ public final class PTableProtos {
       }
       if (((bitField1_ & 0x00000004) == 0x00000004)) {
         size += com.google.protobuf.CodedOutputStream
-          .computeBytesSize(40, getSaltColumnsBytes());
+          .computeBytesSize(40, getSaltColumnNamesBytes());
       }
       size += getUnknownFields().getSerializedSize();
       memoizedSerializedSize = size;
@@ -5419,10 +5419,10 @@ public final class PTableProtos {
         result = result && (getViewIndexIdType()
             == other.getViewIndexIdType());
       }
-      result = result && (hasSaltColumns() == other.hasSaltColumns());
-      if (hasSaltColumns()) {
-        result = result && getSaltColumns()
-            .equals(other.getSaltColumns());
+      result = result && (hasSaltColumnNames() == other.hasSaltColumnNames());
+      if (hasSaltColumnNames()) {
+        result = result && getSaltColumnNames()
+            .equals(other.getSaltColumnNames());
       }
       result = result &&
           getUnknownFields().equals(other.getUnknownFields());
@@ -5589,9 +5589,9 @@ public final class PTableProtos {
         hash = (37 * hash) + VIEWINDEXIDTYPE_FIELD_NUMBER;
         hash = (53 * hash) + getViewIndexIdType();
       }
-      if (hasSaltColumns()) {
-        hash = (37 * hash) + SALTCOLUMNS_FIELD_NUMBER;
-        hash = (53 * hash) + getSaltColumns().hashCode();
+      if (hasSaltColumnNames()) {
+        hash = (37 * hash) + SALTCOLUMNNAMES_FIELD_NUMBER;
+        hash = (53 * hash) + getSaltColumnNames().hashCode();
       }
       hash = (29 * hash) + getUnknownFields().hashCode();
       memoizedHashCode = hash;
@@ -5793,7 +5793,7 @@ public final class PTableProtos {
         bitField1_ = (bitField1_ & ~0x00000010);
         viewIndexIdType_ = 5;
         bitField1_ = (bitField1_ & ~0x00000020);
-        saltColumns_ = "";
+        saltColumnNames_ = "";
         bitField1_ = (bitField1_ & ~0x00000040);
         return this;
       }
@@ -5996,7 +5996,7 @@ public final class PTableProtos {
         if (((from_bitField1_ & 0x00000040) == 0x00000040)) {
           to_bitField1_ |= 0x00000004;
         }
-        result.saltColumns_ = saltColumns_;
+        result.saltColumnNames_ = saltColumnNames_;
         result.bitField0_ = to_bitField0_;
         result.bitField1_ = to_bitField1_;
         onBuilt();
@@ -6208,9 +6208,9 @@ public final class PTableProtos {
         if (other.hasViewIndexIdType()) {
           setViewIndexIdType(other.getViewIndexIdType());
         }
-        if (other.hasSaltColumns()) {
+        if (other.hasSaltColumnNames()) {
           bitField1_ |= 0x00000040;
-          saltColumns_ = other.saltColumns_;
+          saltColumnNames_ = other.saltColumnNames_;
           onChanged();
         }
         this.mergeUnknownFields(other.getUnknownFields());
@@ -8358,76 +8358,76 @@ public final class PTableProtos {
         return this;
       }
 
-      // optional string saltColumns = 40;
-      private java.lang.Object saltColumns_ = "";
+      // optional string saltColumnNames = 40;
+      private java.lang.Object saltColumnNames_ = "";
       /**
-       * <code>optional string saltColumns = 40;</code>
+       * <code>optional string saltColumnNames = 40;</code>
        */
-      public boolean hasSaltColumns() {
+      public boolean hasSaltColumnNames() {
         return ((bitField1_ & 0x00000040) == 0x00000040);
       }
       /**
-       * <code>optional string saltColumns = 40;</code>
+       * <code>optional string saltColumnNames = 40;</code>
        */
-      public java.lang.String getSaltColumns() {
-        java.lang.Object ref = saltColumns_;
+      public java.lang.String getSaltColumnNames() {
+        java.lang.Object ref = saltColumnNames_;
         if (!(ref instanceof java.lang.String)) {
           java.lang.String s = ((com.google.protobuf.ByteString) ref)
               .toStringUtf8();
-          saltColumns_ = s;
+          saltColumnNames_ = s;
           return s;
         } else {
           return (java.lang.String) ref;
         }
       }
       /**
-       * <code>optional string saltColumns = 40;</code>
+       * <code>optional string saltColumnNames = 40;</code>
        */
       public com.google.protobuf.ByteString
-          getSaltColumnsBytes() {
-        java.lang.Object ref = saltColumns_;
+          getSaltColumnNamesBytes() {
+        java.lang.Object ref = saltColumnNames_;
         if (ref instanceof String) {
           com.google.protobuf.ByteString b = 
               com.google.protobuf.ByteString.copyFromUtf8(
                   (java.lang.String) ref);
-          saltColumns_ = b;
+          saltColumnNames_ = b;
           return b;
         } else {
           return (com.google.protobuf.ByteString) ref;
         }
       }
       /**
-       * <code>optional string saltColumns = 40;</code>
+       * <code>optional string saltColumnNames = 40;</code>
        */
-      public Builder setSaltColumns(
+      public Builder setSaltColumnNames(
           java.lang.String value) {
         if (value == null) {
     throw new NullPointerException();
   }
   bitField1_ |= 0x00000040;
-        saltColumns_ = value;
+        saltColumnNames_ = value;
         onChanged();
         return this;
       }
       /**
-       * <code>optional string saltColumns = 40;</code>
+       * <code>optional string saltColumnNames = 40;</code>
        */
-      public Builder clearSaltColumns() {
+      public Builder clearSaltColumnNames() {
         bitField1_ = (bitField1_ & ~0x00000040);
-        saltColumns_ = getDefaultInstance().getSaltColumns();
+        saltColumnNames_ = getDefaultInstance().getSaltColumnNames();
         onChanged();
         return this;
       }
       /**
-       * <code>optional string saltColumns = 40;</code>
+       * <code>optional string saltColumnNames = 40;</code>
        */
-      public Builder setSaltColumnsBytes(
+      public Builder setSaltColumnNamesBytes(
           com.google.protobuf.ByteString value) {
         if (value == null) {
     throw new NullPointerException();
   }
   bitField1_ |= 0x00000040;
-        saltColumns_ = value;
+        saltColumnNames_ = value;
         onChanged();
         return this;
       }
@@ -9101,7 +9101,7 @@ public final class PTableProtos {
       "es\030\002 \003(\014\022\033\n\023guidePostsByteCount\030\003 \001(\003\022\025\n" +
       "\rkeyBytesCount\030\004 \001(\003\022\027\n\017guidePostsCount\030" +
       "\005 \001(\005\022!\n\013pGuidePosts\030\006 \001(\0132\014.PGuidePosts" +
-      "\"\336\007\n\006PTable\022\027\n\017schemaNameBytes\030\001 \002(\014\022\026\n\016" +
+      "\"\342\007\n\006PTable\022\027\n\017schemaNameBytes\030\001 \002(\014\022\026\n\016" +
       "tableNameBytes\030\002 \002(\014\022\036\n\ttableType\030\003 \002(\0162" +
       "\013.PTableType\022\022\n\nindexState\030\004 \001(\t\022\026\n\016sequ" +
       "enceNumber\030\005 \002(\003\022\021\n\ttimeStamp\030\006 \002(\003\022\023\n\013p" +
@@ -9125,12 +9125,12 @@ public final class PTableProtos {
       "odedCQCounters\030$ \003(\0132\021.EncodedCQCounter\022" +
       "\"\n\032useStatsForParallelization\030% \001(\010\022\033\n\023t" +
       "ransactionProvider\030& \001(\005\022\032\n\017viewIndexIdT" +
-      "ype\030\' \001(\005:\0015\022\023\n\013saltColumns\030( \001(\t\"6\n\020Enc" +
-      "odedCQCounter\022\021\n\tcolFamily\030\001 \002(\t\022\017\n\007coun",
-      "ter\030\002 \002(\005*A\n\nPTableType\022\n\n\006SYSTEM\020\000\022\010\n\004U" +
-      "SER\020\001\022\010\n\004VIEW\020\002\022\t\n\005INDEX\020\003\022\010\n\004JOIN\020\004B@\n(" +
-      "org.apache.phoenix.coprocessor.generated" +
-      "B\014PTableProtosH\001\210\001\001\240\001\001"
+      "ype\030\' \001(\005:\0015\022\027\n\017saltColumnNames\030( \001(\t\"6\n" +
+      "\020EncodedCQCounter\022\021\n\tcolFamily\030\001 \002(\t\022\017\n\007",
+      "counter\030\002 \002(\005*A\n\nPTableType\022\n\n\006SYSTEM\020\000\022" +
+      "\010\n\004USER\020\001\022\010\n\004VIEW\020\002\022\t\n\005INDEX\020\003\022\010\n\004JOIN\020\004" +
+      "B@\n(org.apache.phoenix.coprocessor.gener" +
+      "atedB\014PTableProtosH\001\210\001\001\240\001\001"
     };
     com.google.protobuf.Descriptors.FileDescriptor.InternalDescriptorAssigner assigner =
       new com.google.protobuf.Descriptors.FileDescriptor.InternalDescriptorAssigner() {
@@ -9154,7 +9154,7 @@ public final class PTableProtos {
           internal_static_PTable_fieldAccessorTable = new
             com.google.protobuf.GeneratedMessage.FieldAccessorTable(
               internal_static_PTable_descriptor,
-              new java.lang.String[] { "SchemaNameBytes", "TableNameBytes", "TableType", "IndexState", "SequenceNumber", "TimeStamp", "PkNameBytes", "BucketNum", "Columns", "Indexes", "IsImmutableRows", "DataTableNameBytes", "DefaultFamilyName", "DisableWAL", "MultiTenant", "ViewType", "ViewStatement", "PhysicalNames", "TenantId", "ViewIndexId", "IndexType", "StatsTimeStamp", "StoreNulls", "BaseColumnCount", "RowKeyOrderOptimizable", "Transactional", "UpdateCacheFrequency", "IndexDisableTimestamp", "IsNamespaceMapped", "AutoParititonSeqName", "IsAppendOnlySchema", "ParentNameBytes", "StorageScheme", "EncodingScheme", "EncodedCQCounters", "UseStatsForParallelization", "TransactionProvider", "ViewIndexIdType", "SaltColumns", });
+              new java.lang.String[] { "SchemaNameBytes", "TableNameBytes", "TableType", "IndexState", "SequenceNumber", "TimeStamp", "PkNameBytes", "BucketNum", "Columns", "Indexes", "IsImmutableRows", "DataTableNameBytes", "DefaultFamilyName", "DisableWAL", "MultiTenant", "ViewType", "ViewStatement", "PhysicalNames", "TenantId", "ViewIndexId", "IndexType", "StatsTimeStamp", "StoreNulls", "BaseColumnCount", "RowKeyOrderOptimizable", "Transactional", "UpdateCacheFrequency", "IndexDisableTimestamp", "IsNamespaceMapped", "AutoParititonSeqName", "IsAppendOnlySchema", "ParentNameBytes", "StorageScheme", "EncodingScheme", "EncodedCQCounters", "UseStatsForParallelization", "TransactionProvider", "ViewIndexIdType", "SaltColumnNames", });
           internal_static_EncodedCQCounter_descriptor =
             getDescriptor().getMessageTypes().get(3);
           internal_static_EncodedCQCounter_fieldAccessorTable = new
